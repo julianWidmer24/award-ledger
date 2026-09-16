@@ -18,6 +18,7 @@ export function LogSession({ go }: ScreenProps) {
   const [f, setF] = useState<LogForm>(() => ({ area: 'vps', activityId: firstIn('vps'), date: toISODate(t.today), mins: 60, desc: '', paid: false, privateBiz: false }));
   const [adding, setAdding] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
+  const [savedId, setSavedId] = useState<string | null>(null);
   const { busy, error, run } = useAsync();
   const set = (patch: Partial<LogForm>) => { setSaved(null); setF(x => ({ ...x, ...patch })); };
 
@@ -27,7 +28,8 @@ export function LogSession({ go }: ScreenProps) {
 
   const save = () => void run(async () => {
     if (blocked || !selected) return;
-    await api.addEntry({ activity_id: selected.id, date: f.date, hours: f.mins / 60, description: f.desc.trim() || undefined });
+    const id = await api.addEntry({ activity_id: selected.id, date: f.date, hours: f.mins / 60, description: f.desc.trim() || undefined });
+    setSavedId(id);
     setSaved(`Saved ${fmtMins(f.mins)} to ${selected.name.split(' — ')[0]}. Status: logged — send it for validation from the dashboard.`);
     setF(x => ({ ...x, desc: '', paid: false, privateBiz: false }));
   });
@@ -111,7 +113,11 @@ export function LogSession({ go }: ScreenProps) {
         <button type="button" onClick={save} className="btn btn-primary btn-block" disabled={blocked || busy} style={{ minHeight: 52, fontSize: 16, marginTop: 4 }}>
           {busy ? 'Saving…' : blocked || !selected ? 'Cannot save this session' : `Save ${fmtMins(f.mins)} to ${selected.name.split(' — ')[0]}`}
         </button>
-        {saved && <p role="status" style={{ textAlign: 'center', fontSize: 13, color: 'var(--color-accent-2-700)', margin: 0 }}>{saved}</p>}
+        {saved && (
+          <p role="status" style={{ textAlign: 'center', fontSize: 13, color: 'var(--color-accent-2-700)', margin: 0 }}>
+            {saved}{savedId && <> <button type="button" className="link-btn" onClick={() => go('friends', 'entry:' + savedId)} style={{ fontSize: 13 }}>Share it with friends →</button></>}
+          </p>
+        )}
       </div>
 
       <div className="log-side" style={{ display: 'grid', gap: 'var(--space-3)' }}>

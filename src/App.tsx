@@ -101,7 +101,7 @@ function Shell({ theme, setTheme }: { theme: 'light' | 'dark'; setTheme: (t: 'li
         {screen === 'log' && <LogSession go={go} />}
         {screen === 'goals' && <Goals go={go} />}
         {screen === 'exp' && <Expedition go={go} />}
-        {screen === 'friends' && <Friends go={go} />}
+        {screen === 'friends' && <Friends go={go} shareParam={param} />}
         {screen === 'friend' && <FriendProfileScreen go={go} friendId={param ?? ''} />}
         {screen === 'book' && <RecordBook go={go} />}
         {screen === 'resources' && <Resources go={go} />}

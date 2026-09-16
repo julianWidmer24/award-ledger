@@ -1,26 +1,23 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import type { ScreenProps } from '../App';
-import { AREAS, SHARE, levelById, shareOn } from '../data';
-import { areaProgress, timeline, weekHours } from '../derive';
-import { fmtISO, parseISODate, startOfToday, timeAgo } from '../lib/dates';
+import { SHARE, levelById, shareOn } from '../data';
+import { DAY_MS, parseISODate, startOfToday, timeAgo } from '../lib/dates';
 import { useSnapshot, useStore } from '../store';
-import { Avatar, Bar, Field, Notice, ringColor, useAsync } from '../components/ui';
+import { Avatar, Field, Notice, useAsync } from '../components/ui';
+import { Composer } from '../components/Composer';
+import { PostCard } from '../components/PostCard';
+import { errorMessage } from '../lib/supabase';
 import type { FriendSummary } from '../types';
-import { DAY_MS, fmtMonth } from '../lib/dates';
 
-export function Friends({ go }: ScreenProps) {
+/** The Friends page is the feed: your posts and your friends', with the friend list alongside. */
+export function Friends({ go, shareParam }: ScreenProps & { shareParam?: string }) {
   const s = useSnapshot();
-  const { api, social, session } = useStore();
-  const [inviteOpen, setInviteOpen] = useState(social.friends.length === 0 && social.requests.length === 0);
-  const [inviteCode, setInviteCode] = useState('');
-  const [sentTo, setSentTo] = useState<string | null>(null);
-  const invite = useAsync();
-  const act = useAsync();
-  const t = timeline(s.profile);
-  const myTarget = levelById(s.profile.target_level);
-  const myAreas = areaProgress(s, myTarget, t);
-  const myWeek = weekHours(s, t);
-  const me = session?.user.id;
+  const { api, social, feed, session } = useStore();
+  const me = session?.user.id ?? '';
+  const [feedError, setFeedError] = useState<string | null>(null);
+  const presetEntry = shareParam?.startsWith('entry:') ? shareParam.slice(6) : undefined;
+
+  useEffect(() => { api.loadFeed().catch(e => setFeedError(errorMessage(e))); /* eslint-disable-line */ }, [social.friends.length]);
 
   return (
     <section className="screen" aria-label="Friends">
@@ -28,160 +25,141 @@ export function Friends({ go }: ScreenProps) {
         <div>
           <h6 className="eyebrow">Friends</h6>
           <h1 style={{ margin: 0 }}>Working on it together</h1>
-          <p className="text-muted lede">Friends see your hours and pace, you see theirs. No scores, no leaderboard — just a weekly check-in on who logged what.</p>
+          <p className="text-muted lede">Post a session, a trip, a few photos. Friends give kudos and comment. No scores, no leaderboard.</p>
         </div>
-        <div className="row">
-          <span className="text-muted small">Your friend code</span>
-          <span className="tag tag-neutral" style={{ fontFamily: 'var(--font-heading)', fontSize: 13, padding: '6px 14px', letterSpacing: '.06em' }}>{s.profile.friend_code}</span>
-          <button className="btn btn-primary" onClick={() => setInviteOpen(o => !o)} aria-expanded={inviteOpen}>Add a friend</button>
-        </div>
+        <FriendStrip friends={social.friends} go={go} />
       </div>
 
-      {inviteOpen && (
-        <form className="card pad" style={{ gap: 'var(--space-3)', border: '2px solid var(--color-accent)' }}
-          onSubmit={e => { e.preventDefault(); void invite.run(async () => { const name = await api.sendFriendRequest(inviteCode); setSentTo(name); setInviteCode(''); }); }}>
-          <div className="card-kicker">Add a friend</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 'var(--space-2)', alignItems: 'end' }}>
-            <Field label="Their friend code"><input className="input" placeholder="e.g. OAK-7Q2M" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} autoFocus /></Field>
-            <button type="submit" className="btn btn-secondary" disabled={invite.busy || inviteCode.trim().length < 6}>Send request</button>
-          </div>
-          {sentTo && <Notice kind="ok">Request sent to {sentTo}.</Notice>}
-          {invite.error && <Notice kind="block">{invite.error}</Notice>}
-          <p className="card-body plain">They will see your hours per area, target level and pace once they accept. Descriptions, validators and contact details are never shared.</p>
-        </form>
-      )}
-      {act.error && <Notice kind="block">{act.error}</Notice>}
-
-      <div className="split">
-        <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
-          {social.requests.map(rq => (
-            <div key={rq.id} className="card" style={{ padding: 'var(--space-3) var(--space-4)', flexDirection: 'row', alignItems: 'center', gap: 'var(--space-3)', background: 'var(--color-accent-100)', flexWrap: 'wrap' }}>
-              <Avatar name={rq.display_name} url={rq.avatar_url} size={40} style={{ background: 'var(--color-accent-300)', color: 'var(--color-accent-900)' }} />
-              <div style={{ flex: 1, minWidth: 160 }}><div style={{ fontWeight: 600 }}>{rq.display_name}</div><div className="muted" style={{ fontSize: 12.5 }}>{rq.school ? rq.school + ' · ' : ''}wants to be friends · {timeAgo(rq.created_at)}</div></div>
-              <button className="btn btn-secondary" disabled={act.busy} onClick={() => void act.run(() => api.respondRequest(rq.id, false))}>Decline</button>
-              <button className="btn btn-primary" disabled={act.busy} onClick={() => void act.run(() => api.respondRequest(rq.id, true))}>Accept</button>
-            </div>
-          ))}
-          {social.friends.length === 0 && social.requests.length === 0 && (
-            <div className="card pad"><p className="card-body plain">No friends yet. Share your code <strong>{s.profile.friend_code}</strong> with someone doing the award, or enter theirs above.</p></div>
+      <div className="feed-layout">
+        <div className="feed">
+          <Composer presetEntry={presetEntry} onPosted={() => { if (presetEntry) go('friends'); }} />
+          {feedError && <Notice kind="block">{feedError}</Notice>}
+          {feed === null && !feedError && <div className="card pad"><p className="card-body plain">Loading the feed…</p></div>}
+          {feed && feed.length === 0 && (
+            <div className="card pad"><p className="card-body plain">Nothing here yet. {social.friends.length ? 'Post something — your friends will see it.' : `Share your code ${s.profile.friend_code} with someone doing the award, or enter theirs in the panel.`}</p></div>
           )}
-          {social.friends.map(fr => <FriendCard key={fr.id} fr={fr} myWeek={myWeek} me={me} onView={() => go('friend', fr.id)} />)}
+          {feed?.map(p => <PostCard key={p.id} post={p} me={me} go={go} />)}
         </div>
 
-        <div className="stack">
-          <div className="card pad" style={{ gap: 'var(--space-3)' }}>
-            <div className="card-kicker">What friends see of you</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <Avatar name={s.profile.display_name} url={s.profile.avatar_url} style={{ background: 'var(--color-accent-2-300)', color: 'var(--color-accent-2-900)' }} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18 }}>{shareOn(s.profile.sharing, 'target') ? myTarget.name : 'Target hidden'}</div>
-                <div className="muted" style={{ fontSize: 12.5 }}>{shareOn(s.profile.sharing, 'week') ? `${myWeek} h this week` : 'Weekly hours hidden'}{t.deadline ? ` · ${t.timePct}% of time used` : ''}</div>
-              </div>
-            </div>
-            {shareOn(s.profile.sharing, 'hours') ? (
-              <div style={{ display: 'grid', gap: 8 }}>
-                {myAreas.map(a => (
-                  <div key={a.key} style={{ display: 'grid', gap: 4 }}>
-                    <div className="small muted" style={{ display: 'flex', justifyContent: 'space-between' }}><span>{a.label}</span><span className="num nowrap" style={{ color: 'var(--color-text)', fontWeight: 600 }}>{a.done}&nbsp;/&nbsp;{a.req}&nbsp;h</span></div>
-                    <Bar value={a.pct * 100} color={ringColor(a.onPace)} />
-                  </div>
-                ))}
-              </div>
-            ) : <p className="card-body plain">Hours per area are hidden.</p>}
-          </div>
-
+        <aside className="stack feed-side">
+          <AddFriend />
+          {social.requests.length > 0 && <Requests />}
+          <FriendList friends={social.friends} go={go} />
           <div className="card pad">
             <div className="card-kicker">Sharing</div>
-            {SHARE.map(([key, label, sub]) => (
-              <label key={key} className="toggle-row" style={{ minHeight: 40 }}>
-                <span style={{ display: 'grid' }}><span>{label}</span><span className="small muted">{sub}</span></span>
-                <input type="checkbox" className="checkbox" checked={shareOn(s.profile.sharing, key)} disabled={act.busy}
-                  onChange={() => void act.run(() => api.updateProfile({ sharing: { ...s.profile.sharing, [key]: !shareOn(s.profile.sharing, key) } }))} />
-              </label>
-            ))}
+            <p className="small muted" style={{ margin: 0 }}>Posts are always visible to friends. These control what friends see on your profile.</p>
+            <SharingToggles />
           </div>
-
-          <div className="card pad">
-            <div className="card-kicker">Check-ins</div>
-            {social.checkins.length === 0 ? <p className="card-body plain">Check-ins you send and receive show up here.</p> : (
-              <div className="divided">
-                {social.checkins.map(ci => (
-                  <div key={ci.id} className="bullet" style={{ '--dot': 'var(--color-accent-2)' } as CSSProperties}>
-                    <span style={{ flex: 1 }}>{ci.from_user === me ? `You → ${ci.to_name}` : `${ci.from_name}`}: “{ci.message}”</span>
-                    <span className="text-muted small nowrap">{timeAgo(ci.created_at)}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        </aside>
       </div>
     </section>
   );
 }
 
-function FriendCard({ fr, myWeek, me, onView }: { fr: FriendSummary; myWeek: number; me?: string; onView: () => void }) {
-  const { api, social } = useStore();
-  const [open, setOpen] = useState(false);
-  const [msg, setMsg] = useState('');
-  const { busy, error, run } = useAsync();
-  const lv = fr.target_level ? levelById(fr.target_level) : null;
-  const hours = fr.hours_vps !== null ? { vps: fr.hours_vps, pd: fr.hours_pd ?? 0, pf: fr.hours_pf ?? 0 } : null;
-  // Pace from what they share: remaining hours vs. weeks to their 24th birthday is theirs alone, so
-  // we approximate with hours vs. time since registration against the target's minimum months.
-  let pace: 'on' | 'behind' | null = null;
-  if (hours && lv && fr.registered_on) {
-    const reg = parseISODate(fr.registered_on)!;
-    const weeks = Math.max(1, (startOfToday().getTime() - reg.getTime()) / DAY_MS / 7);
-    const monthsTarget = Math.max(lv.months, 6);
-    const expected = Math.min(1, weeks / (monthsTarget * 4.33));
-    const done = (hours.vps / lv.vps + hours.pd / lv.pd + hours.pf / lv.pf) / 3;
-    pace = done >= expected * 0.85 ? 'on' : 'behind';
-  }
-  const on = pace !== 'behind';
-  const lastCheckin = social.checkins.find(c => c.from_user === me && c.to_user === fr.id);
-  const recentlyNudged = lastCheckin && Date.now() - new Date(lastCheckin.created_at).getTime() < 3 * DAY_MS;
-
+function FriendStrip({ friends, go }: { friends: FriendSummary[]; go: ScreenProps['go'] }) {
+  if (!friends.length) return null;
   return (
-    <div className="card pad" style={{ gap: 'var(--space-3)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-        <Avatar name={fr.display_name} url={fr.avatar_url} style={{ background: on ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', color: on ? 'var(--color-accent-2-900)' : 'var(--color-accent-900)' }} />
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}><button className="link-btn" onClick={onView} style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: 'inherit', textDecoration: 'none' }}>{fr.display_name}</button>{fr.school && <span className="text-muted" style={{ fontSize: 12.5 }}>{fr.school}</span>}</div>
-          <div className="muted" style={{ fontSize: 12.5 }}>
-            {lv ? `Target ${lv.short}` : 'Target hidden'}{fr.registered_on ? ` · registered ${fmtMonth(parseISODate(fr.registered_on)!)}` : ''} · {fr.last_logged ? `last logged ${fmtISO(fr.last_logged)}` : 'nothing logged yet'}
-          </div>
-        </div>
-        {pace && <span className={`tag ${on ? 'tag-accent-2' : 'tag-accent'}`}>{on ? 'On pace' : 'Behind pace'}</span>}
+    <div className="friend-strip" aria-label="Your friends">
+      {friends.map(f => (
+        <button key={f.id} className="friend-chip" onClick={() => go('friend', f.id)}>
+          <Avatar name={f.display_name} url={f.avatar_url} size={48} style={{ background: 'var(--color-accent-2-200)', color: 'var(--color-accent-2-900)' }} />
+          <span>{f.display_name.split(' ')[0]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AddFriend() {
+  const s = useSnapshot();
+  const { api } = useStore();
+  const [code, setCode] = useState('');
+  const [sentTo, setSentTo] = useState<string | null>(null);
+  const { busy, error, run } = useAsync();
+  return (
+    <form className="card pad" style={{ gap: 'var(--space-2)' }} onSubmit={e => { e.preventDefault(); void run(async () => { const name = await api.sendFriendRequest(code); setSentTo(name); setCode(''); }); }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div className="card-kicker">Your friend code</div>
+        <span className="tag tag-neutral" style={{ fontFamily: 'var(--font-heading)', fontSize: 13, padding: '6px 14px', letterSpacing: '.06em' }}>{s.profile.friend_code}</span>
       </div>
-      {hours && lv ? (
-        <div className="friend-areas" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 'var(--space-3)' }}>
-          {AREAS.map(a => (
-            <div key={a.key} style={{ display: 'grid', gap: 5 }}>
-              <div className="small muted" style={{ display: 'flex', justifyContent: 'space-between', gap: 6 }}><span>{a.label}</span><span className="num nowrap" style={{ color: 'var(--color-text)', fontWeight: 600 }}>{hours[a.key]} / {lv[a.key]}</span></div>
-              <Bar value={Math.min(100, hours[a.key] / lv[a.key] * 100)} color={ringColor(on)} />
-            </div>
-          ))}
-        </div>
-      ) : <p className="card-body plain">{hours ? `${hours.vps + hours.pd + hours.pf} h logged in total.` : 'Hours hidden by this friend.'}</p>}
-      {fr.activity_names && fr.activity_names.length > 0 && <div className="row" style={{ gap: 6 }}>{fr.activity_names.map(n => <span key={n} className="tag tag-neutral">{n}</span>)}</div>}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-        <span className="muted nowrap" style={{ fontSize: 13 }}>
-          This week: <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{fr.week_hours ?? '—'}&nbsp;h</strong> · you: <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{myWeek}&nbsp;h</strong>
-        </span>
-        <span className="row" style={{ gap: 4 }}>
-          <button className="btn btn-secondary" onClick={onView} style={{ padding: '6px 12px', fontSize: 13 }}>View profile</button>
-          <button className="link-btn small" disabled={busy} onClick={() => { if (confirm(`Remove ${fr.display_name} as a friend?`)) void run(() => api.removeFriend(fr.friendship_id)); }}>Remove</button>
-          <button className="btn btn-ghost" disabled={busy || recentlyNudged} onClick={() => setOpen(o => !o)} style={{ fontFamily: 'var(--font-body)', fontSize: 13, padding: '6px 12px' }}>{recentlyNudged ? 'Check-in sent' : 'Send a check-in'}</button>
-        </span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, alignItems: 'end' }}>
+        <Field label="Add a friend by their code"><input className="input" placeholder="e.g. OAK-7Q2M" value={code} onChange={e => setCode(e.target.value.toUpperCase())} /></Field>
+        <button type="submit" className="btn btn-secondary" disabled={busy || code.trim().length < 6}>Send</button>
       </div>
-      {open && !recentlyNudged && (
-        <form style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8 }} onSubmit={e => { e.preventDefault(); void run(async () => { await api.sendCheckin(fr.id, msg.trim() || 'Checking in — how is this week going?'); setOpen(false); setMsg(''); }); }}>
-          <input className="input" value={msg} onChange={e => setMsg(e.target.value)} maxLength={280} placeholder="Training hike Saturday? I'm in." autoFocus />
-          <button type="submit" className="btn btn-primary" disabled={busy}>Send</button>
-        </form>
-      )}
+      {sentTo && <Notice kind="ok">Request sent to {sentTo}.</Notice>}
+      {error && <Notice kind="block">{error}</Notice>}
+    </form>
+  );
+}
+
+function Requests() {
+  const { api, social } = useStore();
+  const { busy, error, run } = useAsync();
+  return (
+    <div className="card pad" style={{ gap: 'var(--space-2)', background: 'var(--color-accent-100)' }}>
+      <div className="card-kicker">Friend requests</div>
+      {social.requests.map(rq => (
+        <div key={rq.id} style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <Avatar name={rq.display_name} url={rq.avatar_url} size={36} style={{ background: 'var(--color-accent-300)', color: 'var(--color-accent-900)' }} />
+          <div style={{ flex: 1, minWidth: 120 }}><div style={{ fontWeight: 600, fontSize: 14 }}>{rq.display_name}</div><div className="small muted">{rq.school ? rq.school + ' · ' : ''}{timeAgo(rq.created_at)}</div></div>
+          <button className="link-btn small" disabled={busy} onClick={() => void run(() => api.respondRequest(rq.id, false))}>Decline</button>
+          <button className="btn btn-primary" disabled={busy} onClick={() => void run(() => api.respondRequest(rq.id, true))} style={{ padding: '6px 12px', fontSize: 13 }}>Accept</button>
+        </div>
+      ))}
       {error && <Notice kind="block">{error}</Notice>}
     </div>
+  );
+}
+
+function FriendList({ friends, go }: { friends: FriendSummary[]; go: ScreenProps['go'] }) {
+  const { api } = useStore();
+  const { busy, run } = useAsync();
+  return (
+    <div className="card pad" style={{ gap: 4 }}>
+      <div className="card-kicker" style={{ marginBottom: 4 }}>Friends · {friends.length}</div>
+      {friends.length === 0 && <p className="card-body plain">No friends yet.</p>}
+      {friends.map(f => {
+        const pace = paceOf(f);
+        return (
+          <div key={f.id} className="friend-row">
+            <Avatar name={f.display_name} url={f.avatar_url} size={34} style={{ background: 'var(--color-accent-2-200)', color: 'var(--color-accent-2-900)', fontSize: 12 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <button className="link-btn" onClick={() => go('friend', f.id)} style={{ fontWeight: 600, fontSize: 14, textDecoration: 'none', color: 'inherit' }}>{f.display_name}</button>
+              <div className="small muted">{f.target_level ? levelById(f.target_level).short : 'Target hidden'} · {f.week_hours ?? '—'} h this week</div>
+            </div>
+            {pace && <span className={`tag ${pace === 'on' ? 'tag-accent-2' : 'tag-accent'}`}>{pace === 'on' ? 'On pace' : 'Behind'}</span>}
+            <button className="link-btn small" disabled={busy} onClick={() => { if (confirm(`Remove ${f.display_name} as a friend?`)) void run(() => api.removeFriend(f.friendship_id)); }} aria-label={`Remove ${f.display_name}`}>✕</button>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Rough pace from what a friend shares: progress toward their target vs. time since registration. */
+function paceOf(f: FriendSummary): 'on' | 'behind' | null {
+  if (f.hours_vps === null || !f.target_level || !f.registered_on) return null;
+  const lv = levelById(f.target_level);
+  const weeks = Math.max(1, (startOfToday().getTime() - parseISODate(f.registered_on)!.getTime()) / DAY_MS / 7);
+  const expected = Math.min(1, weeks / (Math.max(lv.months, 6) * 4.33));
+  const done = (f.hours_vps / lv.vps + (f.hours_pd ?? 0) / lv.pd + (f.hours_pf ?? 0) / lv.pf) / 3;
+  return done >= expected * 0.85 ? 'on' : 'behind';
+}
+
+function SharingToggles() {
+  const s = useSnapshot();
+  const { api } = useStore();
+  const { busy, error, run } = useAsync();
+  return (
+    <>
+      {SHARE.map(([key, label, sub]) => (
+        <label key={key} className="toggle-row" style={{ minHeight: 40 }}>
+          <span style={{ display: 'grid' }}><span style={{ fontSize: 14 }}>{label}</span><span className="small muted">{sub}</span></span>
+          <input type="checkbox" className="checkbox" checked={shareOn(s.profile.sharing, key)} disabled={busy}
+            onChange={() => void run(() => api.updateProfile({ sharing: { ...s.profile.sharing, [key]: !shareOn(s.profile.sharing, key) } }))} />
+        </label>
+      ))}
+      {error && <Notice kind="block">{error}</Notice>}
+    </>
   );
 }

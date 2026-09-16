@@ -2,7 +2,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
-import type { Activity, Checkin, Entry, EntryStatus, Expedition, ExpeditionInvite, ExpeditionMember, FriendProfile, FriendRequest, FriendSummary, Goal, GoalStatus, MyMembership, Profile, Resource } from './types';
+import type { Activity, Checkin, Entry, EntryStatus, Expedition, ExpeditionInvite, ExpeditionMember, FriendProfile, FriendRequest, FriendSummary, Goal, GoalStatus, MyMembership, Post, Profile, Resource } from './types';
+import { feedImage, isVideo } from './lib/image';
 import type { GoalArea, ResourceCategory } from './data';
 import type { Snapshot } from './derive';
 import { toISODate } from './lib/dates';
@@ -17,7 +18,7 @@ export interface Api {
   updateProfile(patch: Partial<Profile>): Promise<void>;
   addActivity(a: Pick<Activity, 'area' | 'name'> & Partial<Activity>): Promise<Activity>;
   updateActivity(id: string, patch: Partial<Activity>): Promise<void>;
-  addEntry(e: { activity_id: string; date: string; hours: number; description?: string }): Promise<void>;
+  addEntry(e: { activity_id: string; date: string; hours: number; description?: string }): Promise<string>;
   setEntryStatus(ids: string[], status: EntryStatus): Promise<void>;
   deleteEntry(id: string): Promise<void>;
   saveGoal(area: GoalArea, patch: { title: string; text: string }, note?: string): Promise<void>;
@@ -42,11 +43,20 @@ export interface Api {
   leaveExpedition(expeditionId: string): Promise<void>;
   removeExpeditionMember(expeditionId: string, userId: string): Promise<void>;
   saveReflection(expeditionId: string, reflection: string): Promise<void>;
+  loadFeed(): Promise<void>;
+  createPost(p: { caption: string; entry_id?: string | null; expedition_id?: string | null; files: File[] }, onProgress?: (done: number, total: number) => void): Promise<void>;
+  deletePost(post: Post): Promise<void>;
+  toggleKudos(post: Post): Promise<void>;
+  addComment(postId: string, body: string): Promise<void>;
+  deleteComment(commentId: string): Promise<void>;
+  mediaUrls(paths: string[]): Promise<Record<string, string>>;
   signOut(): Promise<void>;
 }
 
 interface StoreValue {
   session: Session | null;
+  feed: Post[] | null;   // null until first loaded
+  mediaUrl: (path: string) => string | undefined;
   authReady: boolean;
   /** True after the user arrives via a password-reset email link, until they set a new password. */
   recovering: boolean;
@@ -72,6 +82,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [recovering, setRecovering] = useState(false);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
   const [social, setSocial] = useState<Social>({ friends: [], requests: [], checkins: [] });
+  const [feed, setFeed] = useState<Post[] | null>(null);
+  const [urls, setUrls] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const userId = session?.user.id ?? null;
@@ -150,11 +162,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const api = useMemo<Api>(() => {
     const uid = () => { const id = userRef.current; if (!id) throw new Error('Not signed in'); return id; };
     const after = async <T,>(p: PromiseLike<T>) => { const r = await p; await reload(); return r; };
-    return {
+    const api: Api = {
       updateProfile: patch => after(supabase.from('profiles').update(patch).eq('id', uid()).then(r => { must(r); })),
       addActivity: a => after(supabase.from('activities').insert({ ...a, user_id: uid() }).select().single().then(r => must<Activity>(r))),
       updateActivity: (id, patch) => after(supabase.from('activities').update(patch).eq('id', id).then(r => { must(r); })),
-      addEntry: e => after(supabase.from('entries').insert({ ...e, user_id: uid() }).then(r => { must(r); })),
+      addEntry: e => after(supabase.from('entries').insert({ ...e, user_id: uid() }).select('id').single().then(r => must<{ id: string }>(r).id)),
       setEntryStatus: (ids, status) => after(supabase.from('entries').update({ status }).in('id', ids).then(r => { must(r); })),
       deleteEntry: id => after(supabase.from('entries').delete().eq('id', id).then(r => { must(r); })),
       saveGoal: async (area, patch, note) => {
@@ -225,11 +237,65 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       leaveExpedition: expedition_id => after(supabase.from('expedition_members').delete().eq('expedition_id', expedition_id).eq('user_id', uid()).then(r => { must(r); })),
       removeExpeditionMember: (expedition_id, user_id) => after(supabase.from('expedition_members').delete().eq('expedition_id', expedition_id).eq('user_id', user_id).then(r => { must(r); })),
       saveReflection: (expedition_id, reflection) => after(supabase.from('expedition_members').update({ reflection: reflection.trim() || null }).eq('expedition_id', expedition_id).eq('user_id', uid()).then(r => { must(r); })),
-      signOut: async () => { await supabase.auth.signOut(); setSnapshot(null); },
+      mediaUrls: async paths => {
+        const missing = paths.filter(p => !urls[p]);
+        if (!missing.length) return urls;
+        const { data, error } = await supabase.storage.from('media').createSignedUrls(missing, 3600);
+        if (error) throw new Error(error.message);
+        const next = { ...urls };
+        for (const d of data ?? []) if (d.signedUrl && d.path) next[d.path] = d.signedUrl;
+        setUrls(next);
+        return next;
+      },
+      loadFeed: async () => {
+        const { data, error } = await supabase.rpc('feed', { p_limit: 40 });
+        if (error) throw new Error(error.message);
+        const posts = (data as Post[]).map(p => ({ ...p, kudos: Number(p.kudos), entry: p.entry ? { ...p.entry, hours: Number(p.entry.hours) } : null }));
+        setFeed(posts);
+        const paths = posts.flatMap(p => p.media.map(m => m.path)).filter(p => !urls[p]);
+        if (paths.length) {
+          const { data: signed } = await supabase.storage.from('media').createSignedUrls(paths, 3600);
+          setUrls(u => { const n = { ...u }; for (const d of signed ?? []) if (d.signedUrl && d.path) n[d.path] = d.signedUrl; return n; });
+        }
+      },
+      createPost: async (p, onProgress) => {
+        const me = uid();
+        const post = must<{ id: string }>(await supabase.from('posts').insert({ user_id: me, caption: p.caption.trim(), entry_id: p.entry_id ?? null, expedition_id: p.expedition_id ?? null }).select('id').single());
+        let done = 0;
+        for (const [i, file] of p.files.entries()) {
+          const video = isVideo(file);
+          const prepared = video ? { blob: file as Blob, type: file.type || 'video/mp4', ext: (file.name.split('.').pop() || 'mp4').toLowerCase() } : await feedImage(file);
+          const path = `${me}/${post.id}/${crypto.randomUUID()}.${prepared.ext}`;
+          const { error } = await supabase.storage.from('media').upload(path, prepared.blob, { contentType: prepared.type, cacheControl: '31536000' });
+          if (error) { await supabase.from('posts').delete().eq('id', post.id); throw new Error(error.message); }
+          must(await supabase.from('post_media').insert({ post_id: post.id, user_id: me, storage_path: path, kind: video ? 'video' : 'image', mime_type: prepared.type, size_bytes: prepared.blob.size, position: i }));
+          onProgress?.(++done, p.files.length);
+        }
+        await api.loadFeed();
+      },
+      deletePost: async post => {
+        if (post.media.length) await supabase.storage.from('media').remove(post.media.map(m => m.path));
+        must(await supabase.from('posts').delete().eq('id', post.id));
+        setFeed(f => f?.filter(x => x.id !== post.id) ?? null);
+      },
+      toggleKudos: async post => {
+        const me = uid();
+        // Optimistic: flip locally, then persist.
+        setFeed(f => f?.map(x => x.id === post.id ? { ...x, kudos_by_me: !x.kudos_by_me, kudos: x.kudos + (x.kudos_by_me ? -1 : 1) } : x) ?? null);
+        const r = post.kudos_by_me
+          ? await supabase.from('post_reactions').delete().eq('post_id', post.id).eq('user_id', me)
+          : await supabase.from('post_reactions').insert({ post_id: post.id, user_id: me });
+        if (r.error) { await api.loadFeed(); throw new Error(r.error.message); }
+      },
+      addComment: async (post_id, body) => { must(await supabase.from('post_comments').insert({ post_id, user_id: uid(), body: body.trim() })); await api.loadFeed(); },
+      deleteComment: async id => { must(await supabase.from('post_comments').delete().eq('id', id)); await api.loadFeed(); },
+      signOut: async () => { await supabase.auth.signOut(); setSnapshot(null); setFeed(null); },
     };
-  }, [reload, snapshot]);
+    return api;
+  }, [reload, snapshot, urls]);
 
-  const value = useMemo<StoreValue>(() => ({ session, authReady, recovering, setRecovering, snapshot, social, loading, error, reload, api }), [session, authReady, recovering, snapshot, social, loading, error, reload, api]);
+  const mediaUrl = useCallback((path: string) => urls[path], [urls]);
+  const value = useMemo<StoreValue>(() => ({ session, authReady, recovering, setRecovering, snapshot, social, feed, mediaUrl, loading, error, reload, api }), [session, authReady, recovering, snapshot, social, feed, mediaUrl, loading, error, reload, api]);
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 

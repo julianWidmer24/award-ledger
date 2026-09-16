@@ -158,3 +158,21 @@ export interface FriendProfile {
   goals: { area: GoalArea; title: string; text: string; status: GoalStatus; version: number; dated: string }[] | null;
   entries: { id: string; date: string; hours: number; status: EntryStatus; activity: string; area: AreaKey }[] | null;
 }
+
+export interface PostMedia { id: string; path: string; kind: 'image' | 'video'; mime: string | null }
+export interface PostComment { id: string; user_id: string; name: string; avatar_url: string | null; body: string; created_at: string }
+
+export interface Post {
+  id: string;
+  user_id: string;
+  caption: string;
+  created_at: string;
+  author: { id: string; display_name: string; avatar_url: string | null };
+  entry: { id: string; date: string; hours: number; activity: string; area: AreaKey } | null;
+  expedition: { id: string; name: string; location: string | null; start_date: string; end_date: string; status: 'planned' | 'completed' } | null;
+  media: PostMedia[];
+  kudos: number;
+  kudos_by_me: boolean;
+  kudos_names: string[];
+  comments: PostComment[];
+}
