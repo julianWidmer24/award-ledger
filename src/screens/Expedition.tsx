@@ -21,7 +21,8 @@ export function Expedition({ go }: ScreenProps) {
   const credit = expeditionCredit(s);
   const [selectedId, setSelectedId] = useState<string | null>(s.expeditions.find(x => x.status === 'planned')?.id ?? s.expeditions[0]?.id ?? null);
   const [editing, setEditing] = useState<Draft | null>(s.expeditions.length || s.expeditionInvites.length ? null : blank());
-  const selected = s.expeditions.find(x => x.id === selectedId) ?? (selectedId === null ? null : s.expeditions[0] ?? null);
+  // Fall back to the first trip when nothing (or a since-deleted trip) is selected — e.g. right after creating the first one.
+  const selected = s.expeditions.find(x => x.id === selectedId) ?? s.expeditions[0] ?? null;
   const invites = useAsync();
 
   return (
