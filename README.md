@@ -24,7 +24,7 @@ While testing you may want to turn off *Authentication → Providers → Email �
 
 ## Deploying
 
-The app is deployed on Vercel at <https://award-ledger.vercel.app> (project `award-ledger`). To ship a new version:
+The app is deployed on Vercel at <https://award-ledger.vercel.app> (project `award-ledger`), connected to the GitHub repo `julianWidmer24/award-ledger`. Every push to `main` deploys to production automatically; pushes to other branches get preview URLs. To deploy by hand instead:
 
 ```bash
 npx vercel deploy --prod
