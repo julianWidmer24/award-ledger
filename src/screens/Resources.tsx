@@ -71,7 +71,7 @@ export function Resources(_: ScreenProps) {
         {mine.length === 0 ? (
           <div className="card pad"><p className="card-body plain">Nothing saved{filter !== 'all' ? ' in this category' : ''} yet. Upload a document or save a link above — a signed validator form, your expedition permit, the syllabus for your language class.</p></div>
         ) : (
-          <div className="split" style={{ gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)' }}>
+          <div className="split even">
             <ResourceList title="Documents" items={files} empty="No documents in this view." onOpen={open} />
             <ResourceList title="Links" items={links} empty="No links in this view." onOpen={open} />
           </div>

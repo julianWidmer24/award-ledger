@@ -80,7 +80,7 @@ export function LogSession({ go }: ScreenProps) {
           </div>
         </fieldset>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="two-col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <label style={{ display: 'grid', gap: 5 }}>
             <span className="label-sm">Date</span>
             <input className="input" type="date" value={f.date} min={toISODate(t.registered)} max={toISODate(t.today)} onChange={e => set({ date: e.target.value })} style={{ minHeight: 44 }} />
