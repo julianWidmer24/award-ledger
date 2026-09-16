@@ -136,7 +136,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const num = (v: number | string | null) => (v === null || v === undefined ? null : Number(v));
       setSocial({ friends: friends.map(f => ({ ...f, hours_vps: num(f.hours_vps), hours_pd: num(f.hours_pd), hours_pf: num(f.hours_pf), week_hours: num(f.week_hours) })), requests, checkins });
     } catch (e) {
-      setError((e as Error).message);
+      const msg = (e as Error).message;
+      // The account was deleted while this browser still held a session: drop it instead of showing an error.
+      if (/coerce the result to a single/i.test(msg)) { await supabase.auth.signOut(); setSnapshot(null); return; }
+      setError(msg);
     } finally {
       setLoading(false);
     }
