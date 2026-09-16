@@ -4,7 +4,7 @@ import { AREAS, SHARE, levelById } from '../data';
 import { areaProgress, timeline, weekHours } from '../derive';
 import { fmtISO, parseISODate, startOfToday, timeAgo } from '../lib/dates';
 import { useSnapshot, useStore } from '../store';
-import { Bar, Field, Notice, initialsOf, ringColor, useAsync } from '../components/ui';
+import { Avatar, Bar, Field, Notice, ringColor, useAsync } from '../components/ui';
 import type { FriendSummary } from '../types';
 import { DAY_MS, fmtMonth } from '../lib/dates';
 
@@ -56,7 +56,7 @@ export function Friends(_: ScreenProps) {
         <div style={{ display: 'grid', gap: 'var(--space-3)' }}>
           {social.requests.map(rq => (
             <div key={rq.id} className="card" style={{ padding: 'var(--space-3) var(--space-4)', flexDirection: 'row', alignItems: 'center', gap: 'var(--space-3)', background: 'var(--color-accent-100)', flexWrap: 'wrap' }}>
-              <span className="avatar" style={{ width: 40, height: 40, background: 'var(--color-accent-300)', color: 'var(--color-accent-900)' }}>{initialsOf(rq.display_name)}</span>
+              <Avatar name={rq.display_name} url={rq.avatar_url} size={40} style={{ background: 'var(--color-accent-300)', color: 'var(--color-accent-900)' }} />
               <div style={{ flex: 1, minWidth: 160 }}><div style={{ fontWeight: 600 }}>{rq.display_name}</div><div className="muted" style={{ fontSize: 12.5 }}>{rq.school ? rq.school + ' · ' : ''}wants to be friends · {timeAgo(rq.created_at)}</div></div>
               <button className="btn btn-secondary" disabled={act.busy} onClick={() => void act.run(() => api.respondRequest(rq.id, false))}>Decline</button>
               <button className="btn btn-primary" disabled={act.busy} onClick={() => void act.run(() => api.respondRequest(rq.id, true))}>Accept</button>
@@ -72,7 +72,7 @@ export function Friends(_: ScreenProps) {
           <div className="card pad" style={{ gap: 'var(--space-3)' }}>
             <div className="card-kicker">What friends see of you</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
-              <span className="avatar" style={{ background: 'var(--color-accent-2-300)', color: 'var(--color-accent-2-900)' }}>{initialsOf(s.profile.display_name)}</span>
+              <Avatar name={s.profile.display_name} url={s.profile.avatar_url} style={{ background: 'var(--color-accent-2-300)', color: 'var(--color-accent-2-900)' }} />
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18 }}>{s.profile.sharing.target ? myTarget.name : 'Target hidden'}</div>
                 <div className="muted" style={{ fontSize: 12.5 }}>{s.profile.sharing.week ? `${myWeek} h this week` : 'Weekly hours hidden'}{t.deadline ? ` · ${t.timePct}% of time used` : ''}</div>
@@ -145,7 +145,7 @@ function FriendCard({ fr, myWeek, me }: { fr: FriendSummary; myWeek: number; me?
   return (
     <div className="card pad" style={{ gap: 'var(--space-3)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
-        <span className="avatar" style={{ fontSize: 16, background: on ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', color: on ? 'var(--color-accent-2-900)' : 'var(--color-accent-900)' }}>{initialsOf(fr.display_name)}</span>
+        <Avatar name={fr.display_name} url={fr.avatar_url} style={{ background: on ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', color: on ? 'var(--color-accent-2-900)' : 'var(--color-accent-900)' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}><span style={{ fontFamily: 'var(--font-heading)', fontSize: 18 }}>{fr.display_name}</span>{fr.school && <span className="text-muted" style={{ fontSize: 12.5 }}>{fr.school}</span>}</div>
           <div className="muted" style={{ fontSize: 12.5 }}>

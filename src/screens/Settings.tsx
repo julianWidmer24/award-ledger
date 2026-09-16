@@ -6,6 +6,7 @@ import { useSnapshot, useStore } from '../store';
 import { supabase } from '../lib/supabase';
 import { ActivityForm, Field, Notice, cleanDraft, draftFrom, emptyActivity, useAsync } from '../components/ui';
 import type { Activity } from '../types';
+import { AvatarUpload } from '../components/AvatarUpload';
 
 export function Settings({ onReplayTour }: ScreenProps & { onReplayTour: () => void }) {
   const s = useSnapshot();
@@ -81,6 +82,7 @@ export function Settings({ onReplayTour }: ScreenProps & { onReplayTour: () => v
 
         <form className="card pad" style={{ gap: 'var(--space-3)' }} onSubmit={e => { e.preventDefault(); setSaved(false); void profile.run(async () => { await api.updateProfile({ display_name: form.display_name.trim(), school: form.school.trim() || null, birthday: form.birthday || null, registered_on: form.registered_on || null, advisor_name: form.advisor_name.trim() || null, target_level: form.target_level }); setSaved(true); }); }}>
           <div className="card-kicker">Profile</div>
+          <AvatarUpload name={p.display_name} url={p.avatar_url} />
           <Field label="Name"><input className="input" value={form.display_name} onChange={e => set({ display_name: e.target.value })} required /></Field>
           <Field label="School"><input className="input" value={form.school} onChange={e => set({ school: e.target.value })} /></Field>
           <Field label="Date of birth" hint="Sets your 24th-birthday deadline."><input className="input" type="date" value={form.birthday} max={toISODate(new Date())} onChange={e => set({ birthday: e.target.value })} /></Field>

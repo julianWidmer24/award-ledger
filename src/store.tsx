@@ -2,8 +2,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
-import type { Activity, Checkin, Entry, EntryStatus, Expedition, FriendRequest, FriendSummary, Goal, GoalStatus, Profile } from './types';
-import type { GoalArea } from './data';
+import type { Activity, Checkin, Entry, EntryStatus, Expedition, FriendRequest, FriendSummary, Goal, GoalStatus, Profile, Resource } from './types';
+import type { GoalArea, ResourceCategory } from './data';
 import type { Snapshot } from './derive';
 import { toISODate } from './lib/dates';
 
@@ -28,6 +28,13 @@ export interface Api {
   respondRequest(id: string, accept: boolean): Promise<void>;
   removeFriend(friendshipId: string): Promise<void>;
   sendCheckin(toUser: string, message: string): Promise<void>;
+  uploadAvatar(blob: Blob): Promise<void>;
+  removeAvatar(): Promise<void>;
+  addLink(r: { title: string; url: string; category: ResourceCategory; notes?: string }): Promise<void>;
+  uploadDocument(file: File, meta: { title: string; category: ResourceCategory; notes?: string }, onProgress?: (pct: number) => void): Promise<void>;
+  updateResource(id: string, patch: Partial<Pick<Resource, 'title' | 'category' | 'notes' | 'url'>>): Promise<void>;
+  deleteResource(r: Resource): Promise<void>;
+  documentUrl(path: string): Promise<string>;
   signOut(): Promise<void>;
 }
 
@@ -89,6 +96,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         supabase.rpc('friend_summaries').then(r => must<FriendSummary[]>(r)),
         supabase.rpc('pending_requests').then(r => must<FriendRequest[]>(r)),
         supabase.rpc('my_checkins').then(r => must<Checkin[]>(r)),
+        // Tolerate a deploy that lands before the resources migration: a missing table just means "none yet".
+        supabase.from('resources').select('*').eq('user_id', uid).order('created_at', { ascending: false })
+          .then(r => (r.error && /resources/.test(r.error.message) ? [] : must<Resource[]>(r))),
       ]);
     try {
       let result: Awaited<ReturnType<typeof fetchAll>>;
@@ -99,9 +109,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await new Promise(r => setTimeout(r, 1500));
         result = await fetchAll();
       }
-      const [profile, activities, entries, goals, expeditions, friends, requests, checkins] = result;
+      const [profile, activities, entries, goals, expeditions, friends, requests, checkins, resources] = result;
       if (userRef.current !== uid) return;
-      setSnapshot({ profile, activities, entries: entries.map(e => ({ ...e, hours: Number(e.hours) })), goals, expeditions });
+      setSnapshot({ profile, activities, entries: entries.map(e => ({ ...e, hours: Number(e.hours) })), goals, expeditions, resources });
       // numeric columns can arrive as strings depending on the PostgREST version
       const num = (v: number | string | null) => (v === null || v === undefined ? null : Number(v));
       setSocial({ friends: friends.map(f => ({ ...f, hours_vps: num(f.hours_vps), hours_pd: num(f.hours_pd), hours_pf: num(f.hours_pf), week_hours: num(f.week_hours) })), requests, checkins });
@@ -149,6 +159,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         : supabase.from('friendships').delete().eq('id', id)).then(r => { must(r); })),
       removeFriend: id => after(supabase.from('friendships').delete().eq('id', id).then(r => { must(r); })),
       sendCheckin: (to_user, message) => after(supabase.from('checkins').insert({ from_user: uid(), to_user, message }).then(r => { must(r); })),
+      uploadAvatar: async blob => {
+        const path = `${uid()}/avatar.jpg`;
+        const { error } = await supabase.storage.from('avatars').upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+        if (error) throw new Error(error.message);
+        const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+        await after(supabase.from('profiles').update({ avatar_url: `${data.publicUrl}?v=${Date.now()}` }).eq('id', uid()).then(r => { must(r); }));
+      },
+      removeAvatar: async () => {
+        await supabase.storage.from('avatars').remove([`${uid()}/avatar.jpg`]);
+        await after(supabase.from('profiles').update({ avatar_url: null }).eq('id', uid()).then(r => { must(r); }));
+      },
+      addLink: r => after(supabase.from('resources').insert({ ...r, kind: 'link', user_id: uid() }).then(x => { must(x); })),
+      uploadDocument: async (file, meta) => {
+        const safe = file.name.replace(/[^\w.\-]+/g, '_').slice(-80);
+        const path = `${uid()}/${crypto.randomUUID()}-${safe}`;
+        const { error } = await supabase.storage.from('documents').upload(path, file, { contentType: file.type || 'application/octet-stream' });
+        if (error) throw new Error(error.message);
+        await after(supabase.from('resources').insert({ ...meta, kind: 'file', user_id: uid(), storage_path: path, mime_type: file.type || null, size_bytes: file.size }).then(x => { must(x); }));
+      },
+      updateResource: (id, patch) => after(supabase.from('resources').update(patch).eq('id', id).then(r => { must(r); })),
+      deleteResource: async r => {
+        if (r.storage_path) await supabase.storage.from('documents').remove([r.storage_path]);
+        await after(supabase.from('resources').delete().eq('id', r.id).then(x => { must(x); }));
+      },
+      documentUrl: async path => {
+        const { data, error } = await supabase.storage.from('documents').createSignedUrl(path, 120);
+        if (error) throw new Error(error.message);
+        return data.signedUrl;
+      },
       signOut: async () => { await supabase.auth.signOut(); setSnapshot(null); },
     };
   }, [reload, snapshot]);

@@ -4,7 +4,7 @@ import { ENTRY_STATUS, areaByKey, levelById, type DashboardLayout } from '../dat
 import { activityById, areaProgress, expeditionSummary, gate, ladder, RING_CIRCUMFERENCE, tasks, timeline, type AreaProgress } from '../derive';
 import { fmtDate, fmtDayMonth, parseISODate } from '../lib/dates';
 import { usePref, useSnapshot, useStore } from '../store';
-import { Bar, CheckIcon, Notice, paceColor, ringColor, useAsync } from '../components/ui';
+import { Bar, CheckIcon, Notice, paceColor, ringColor, useAsync, useCountUp, useMounted } from '../components/ui';
 import { GettingStarted } from '../components/GettingStarted';
 
 const LAYOUTS: [DashboardLayout, string][] = [['rings', 'Rings'], ['ledger', 'Ledger'], ['pace', 'Pace']];
@@ -75,7 +75,7 @@ export function Dashboard({ go }: ScreenProps) {
       <div className="grid-auto wide">
         <div className="card pad">
           <div className="card-kicker">Time gate</div>
-          <div className="stat"><span className="big" style={{ fontSize: 36 }}>{t.monthsElapsed}</span><span className="muted">of {target.months} months since registration</span></div>
+          <div className="stat"><CountUp className="big" style={{ fontSize: 36 }} value={t.monthsElapsed} /><span className="muted">of {target.months} months since registration</span></div>
           <Bar value={g.pct} color="var(--color-accent-2)" />
           <p className="card-body plain">{g.text}</p>
         </div>
@@ -83,7 +83,7 @@ export function Dashboard({ go }: ScreenProps) {
           <div className="card-kicker">Deadline · 24th birthday</div>
           {t.deadline ? (
             <>
-              <div className="stat"><span className="big" style={{ fontSize: 36 }}>{t.daysLeft}</span><span className="muted">days left · {fmtDate(t.deadline)}</span></div>
+              <div className="stat"><CountUp className="big" style={{ fontSize: 36 }} value={t.daysLeft} /><span className="muted">days left · {fmtDate(t.deadline)}</span></div>
               <Bar value={t.timePct} track="var(--color-accent-200)" />
               <p className="card-body plain">{t.timePct}% of the window between registration and your 24th birthday has passed. Everything, including the expedition and advisor sign-off, must be complete by then.</p>
             </>
@@ -168,9 +168,15 @@ export function Dashboard({ go }: ScreenProps) {
   );
 }
 
-const SCREEN_NAMES = { dash: 'Dashboard', log: 'Log', goals: 'Goals', exp: 'Expedition', friends: 'Friends', book: 'Record book', settings: 'Settings' } as const;
+const SCREEN_NAMES = { dash: 'Dashboard', log: 'Log', goals: 'Goals', exp: 'Expedition', friends: 'Friends', book: 'Record book', resources: 'Resources', settings: 'Settings' } as const;
+
+function CountUp({ value, decimals = 0, className, style }: { value: number; decimals?: number; className?: string; style?: CSSProperties }) {
+  const shown = useCountUp(value, decimals);
+  return <span className={className} style={style}>{shown}</span>;
+}
 
 function Rings({ areas }: { areas: AreaProgress[] }) {
+  const mounted = useMounted();
   return (
     <div className="grid-auto">
       {areas.map(a => (
@@ -180,15 +186,15 @@ function Rings({ areas }: { areas: AreaProgress[] }) {
             <div className="ring">
               <svg viewBox="0 0 100 100" width="132" height="132" aria-hidden="true">
                 <circle cx="50" cy="50" r="42" fill="none" stroke="var(--color-neutral-300)" strokeWidth="9" />
-                <circle className="ring-anim" cx="50" cy="50" r="42" fill="none" stroke={ringColor(a.onPace)} strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(a.pct * RING_CIRCUMFERENCE).toFixed(1)} ${RING_CIRCUMFERENCE}`} transform="rotate(-90 50 50)" />
+                <circle className="ring-anim" cx="50" cy="50" r="42" fill="none" stroke={ringColor(a.onPace)} strokeWidth="9" strokeLinecap="round" strokeDasharray={`${((mounted ? a.pct : 0) * RING_CIRCUMFERENCE).toFixed(1)} ${RING_CIRCUMFERENCE}`} transform="rotate(-90 50 50)" />
               </svg>
               <div className="ring-label">
-                <div className="big" style={{ fontSize: 34 }}>{a.done}</div>
+                <CountUp className="big" style={{ fontSize: 34 }} value={a.done} decimals={Number.isInteger(a.done) ? 0 : 1} />
                 <div className="muted" style={{ fontSize: 11, marginTop: 3 }}>of {a.req} h</div>
               </div>
             </div>
             <div style={{ display: 'grid', gap: 10, minWidth: 0 }}>
-              <div><div className="big" style={{ fontSize: 22 }}>{a.remaining} h</div><div className="small muted">remaining</div></div>
+              <div><div className="big" style={{ fontSize: 22 }}><CountUp value={a.remaining} decimals={Number.isInteger(a.remaining) ? 0 : 1} /> h</div><div className="small muted">remaining</div></div>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12.5, lineHeight: 1.35 }}>
                 <span style={{ width: 9, height: 9, borderRadius: '50%', background: paceColor(a.onPace), flex: 'none', marginTop: 4 }} />
                 <span><strong style={{ fontWeight: 600, color: paceColor(a.onPace) }}>{a.paceLabel}</strong><br /><span className="muted">{a.paceDetail}</span></span>

@@ -1,0 +1,80 @@
+/* Motion — purposeful, short (200–450 ms), ease-out, staggered. Every animation here
+   either orients (where did this come from), confirms (that worked) or focuses (look here). */
+:root { --ease-out: cubic-bezier(.2, .7, .2, 1); --ease-spring: cubic-bezier(.34, 1.4, .64, 1); }
+
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes slide-in-right { from { opacity: 0; transform: translateX(28px); } to { opacity: 1; transform: none; } }
+@keyframes slide-in-left { from { opacity: 0; transform: translateX(-28px); } to { opacity: 1; transform: none; } }
+@keyframes pop { 0% { transform: scale(.6); opacity: 0; } 70% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); } }
+@keyframes pulse-ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-2) 45%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Screen entry: sections rise one after another */
+.screen > *, .log-layout > * { animation: rise .45s var(--ease-out) both; }
+.screen > :nth-child(1), .log-layout > :nth-child(1) { animation-delay: 0ms; }
+.screen > :nth-child(2), .log-layout > :nth-child(2) { animation-delay: 50ms; }
+.screen > :nth-child(3), .log-layout > :nth-child(3) { animation-delay: 100ms; }
+.screen > :nth-child(4) { animation-delay: 150ms; }
+.screen > :nth-child(5) { animation-delay: 200ms; }
+.screen > :nth-child(6) { animation-delay: 250ms; }
+.screen > :nth-child(n+7) { animation-delay: 300ms; }
+
+/* Cards inside grids stagger too */
+.grid-auto > *, .ladder > *, .started-grid > *, .intro-grid > *, .level-grid > *, .resource-grid > * { animation: rise .4s var(--ease-out) both; }
+.grid-auto > :nth-child(2), .ladder > :nth-child(2), .started-grid > :nth-child(2), .intro-grid > :nth-child(2), .level-grid > :nth-child(2), .resource-grid > :nth-child(2) { animation-delay: 60ms; }
+.grid-auto > :nth-child(3), .ladder > :nth-child(3), .started-grid > :nth-child(3), .intro-grid > :nth-child(3), .level-grid > :nth-child(3), .resource-grid > :nth-child(3) { animation-delay: 120ms; }
+.grid-auto > :nth-child(4), .ladder > :nth-child(4), .started-grid > :nth-child(4), .intro-grid > :nth-child(4), .level-grid > :nth-child(4), .resource-grid > :nth-child(4) { animation-delay: 180ms; }
+.grid-auto > :nth-child(5), .ladder > :nth-child(5), .started-grid > :nth-child(5), .intro-grid > :nth-child(5), .level-grid > :nth-child(5), .resource-grid > :nth-child(5) { animation-delay: 240ms; }
+.grid-auto > :nth-child(n+6), .ladder > :nth-child(n+6), .intro-grid > :nth-child(n+6), .level-grid > :nth-child(n+6), .resource-grid > :nth-child(n+6) { animation-delay: 300ms; }
+
+/* Onboarding step transitions */
+.onboard-panel { animation: slide-in-right .4s var(--ease-out) both; }
+.onboard-panel.back { animation-name: slide-in-left; }
+.steps li { transition: background .25s, color .25s; }
+.step-dot { transition: background .3s var(--ease-out), transform .3s var(--ease-spring); }
+.steps li.current .step-dot { transform: scale(1.12); }
+.steps li.done .step-dot svg { animation: pop .35s var(--ease-spring) both; }
+.step-progress { height: 3px; border-radius: 999px; background: var(--color-neutral-300); overflow: hidden; }
+.step-progress > div { height: 100%; background: var(--color-accent); border-radius: 999px; transition: width .5s var(--ease-out); }
+.friend-code-card { animation: pulse-ring 1.6s var(--ease-out) .4s 2; }
+
+/* Progress: bars and rings grow in from zero on first paint */
+.bar > .fill { transition: width .7s var(--ease-out); }
+.ring-anim { transition: stroke-dasharray .9s var(--ease-out); }
+
+/* Micro-interactions */
+.btn, .chip, .activity, .ladder-step, .task, .started-item, .goal-item, .avatar-btn, .resource-card {
+  transition: transform .15s var(--ease-out), background .2s, border-color .2s, box-shadow .2s, opacity .2s;
+}
+.btn:active:not(:disabled), .chip:active, .activity:active, .ladder-step:active, .avatar-btn:active { transform: scale(.97); }
+.task:hover, .started-item:hover:not(:disabled), .resource-card:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.ladder-step:hover:not(:disabled) { transform: translateY(-2px); }
+.chip.on, .seg-opt:has(input:checked) { animation: pop .25s var(--ease-spring); }
+.checkbox { transition: transform .15s var(--ease-spring); }
+.checkbox:checked { transform: scale(1.12); }
+.started-item.done .started-check svg { animation: pop .4s var(--ease-spring) both; }
+.tag { transition: background .25s, color .25s; }
+.warning, [role="status"] { animation: rise .3s var(--ease-out) both; }
+.btn-icon svg { transition: transform .4s var(--ease-spring); }
+.btn-icon:hover svg { transform: rotate(20deg); }
+.nav a { position: relative; transition: color .2s; }
+.nav a::after { content: ""; position: absolute; left: 0; right: 0; bottom: -4px; height: 2px; border-radius: 2px; background: var(--color-accent); transform: scaleX(0); transform-origin: left; transition: transform .25s var(--ease-out); }
+.nav a[aria-current="page"]::after, .nav a:hover::after { transform: scaleX(1); }
+
+/* Avatars */
+.avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+.avatar { overflow: hidden; position: relative; }
+.avatar-upload { position: relative; width: 112px; height: 112px; }
+.avatar-upload .avatar { width: 112px; height: 112px; font-size: 36px; box-shadow: var(--shadow-md); }
+.avatar-upload.busy .avatar::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(110deg, transparent 30%, color-mix(in srgb, var(--color-bg) 55%, transparent) 50%, transparent 70%); background-size: 200% 100%; animation: shimmer 1.1s linear infinite; }
+.avatar-upload .edit { position: absolute; right: -2px; bottom: -2px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--color-accent); color: var(--color-bg); border: 3px solid var(--color-surface); cursor: pointer; transition: transform .2s var(--ease-spring); }
+.avatar-upload .edit:hover { transform: scale(1.08); }
+.avatar-upload:has(.avatar:hover) .avatar img { filter: brightness(.92); }
+.drop { border: 2px dashed var(--color-divider); border-radius: var(--radius-lg); padding: var(--space-4); text-align: center; transition: border-color .2s, background .2s; cursor: pointer; }
+.drop.over, .drop:hover { border-color: var(--color-accent); background: var(--color-accent-100); }
+.spinner { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--color-divider); border-top-color: var(--color-accent); animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
+}

@@ -1,10 +1,11 @@
 // Row shapes as returned by Supabase (see supabase/schema.sql).
-import type { AreaKey, GoalArea, LevelId, ShareKey } from './data';
+import type { AreaKey, GoalArea, LevelId, ResourceCategory, ShareKey } from './data';
 
 export interface Profile {
   id: string;
   display_name: string;
   school: string | null;
+  avatar_url: string | null;
   friend_code: string;
   birthday: string | null;      // YYYY-MM-DD
   registered_on: string | null; // YYYY-MM-DD
@@ -81,6 +82,7 @@ export interface FriendSummary {
   id: string;
   display_name: string;
   school: string | null;
+  avatar_url: string | null;
   target_level: LevelId | null;   // null when the friend hides it
   registered_on: string | null;
   hours_vps: number | null;       // null when the friend hides hours
@@ -96,6 +98,7 @@ export interface FriendRequest {
   requester_id: string;
   display_name: string;
   school: string | null;
+  avatar_url: string | null;
   created_at: string;
 }
 
@@ -106,5 +109,19 @@ export interface Checkin {
   from_name: string;
   to_name: string;
   message: string;
+  created_at: string;
+}
+
+export interface Resource {
+  id: string;
+  user_id: string;
+  kind: 'file' | 'link';
+  title: string;
+  url: string | null;
+  storage_path: string | null;
+  mime_type: string | null;
+  size_bytes: number | null;
+  category: ResourceCategory;
+  notes: string | null;
   created_at: string;
 }

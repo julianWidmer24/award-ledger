@@ -18,7 +18,7 @@ export function GettingStarted({ snapshot, friendCount, go }: { snapshot: Snapsh
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <div>
           <div className="card-kicker" style={{ color: 'var(--color-accent-2-700)' }}>Getting started</div>
-          <div className="card-title" style={{ fontSize: 20 }}>{done === 0 ? 'Five things that set you up' : `${done} of ${items.length} done`}</div>
+          <div className="card-title" style={{ fontSize: 20 }}>{done === 0 ? 'Six things that set you up' : `${done} of ${items.length} done`}</div>
         </div>
         <button className="btn btn-ghost" onClick={dismiss} style={{ fontFamily: 'var(--font-body)', fontSize: 13 }}>Hide this</button>
       </div>

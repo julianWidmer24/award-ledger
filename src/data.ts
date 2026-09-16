@@ -3,7 +3,7 @@
 export type AreaKey = 'vps' | 'pd' | 'pf';
 export type GoalArea = AreaKey | 'exp';
 export type LevelId = 'bc' | 'sc' | 'gc' | 'bm' | 'sm' | 'gm';
-export type Screen = 'dash' | 'log' | 'goals' | 'exp' | 'friends' | 'book' | 'settings';
+export type Screen = 'dash' | 'log' | 'goals' | 'exp' | 'friends' | 'book' | 'resources' | 'settings';
 export type DashboardLayout = 'rings' | 'ledger' | 'pace';
 export type ShareKey = 'hours' | 'target' | 'week' | 'activities';
 
@@ -68,3 +68,24 @@ export const LOG_RULES = [
 
 /** Trailing window used to estimate a participant's weekly pace. */
 export const PACE_WEEKS = 8;
+
+export type ResourceCategory = 'record' | 'project' | 'official' | 'other';
+
+export const RESOURCE_CATEGORIES: [ResourceCategory, string, string][] = [
+  ['record', 'Record book', 'Signed forms, validator letters, draft write-ups'],
+  ['project', 'My projects', 'Plans, itineraries, syllabi, training logs for your own activities'],
+  ['other', 'Other', 'Anything else worth keeping to hand'],
+];
+
+export interface OfficialResource { title: string; url: string; blurb: string; kind: 'pdf' | 'site' | 'portal' }
+
+/** Published by the Congressional Award Foundation (congressionalaward.org). URLs verified 16 Sep 2026. */
+export const OFFICIAL_RESOURCES: OfficialResource[] = [
+  { title: 'Program Book (2023)', url: 'https://www.congressionalaward.org/wp-content/uploads/Program-Book_2023.pdf', kind: 'pdf', blurb: 'The official guide: requirements for every level, sample activities, rules on what counts, and FAQs.' },
+  { title: 'Participant Record Book', url: 'https://www.congressionalaward.org/wp-content/uploads/2021/06/recordbook.pdf', kind: 'pdf', blurb: 'The form your final submission follows — see exactly what goals, logs, validators and the expedition section must contain.' },
+  { title: 'Award Workbook (fillable)', url: 'https://www.congressionalaward.org/wp-content/uploads/2021/11/Draft_Award_Workbook_Fillable.pdf', kind: 'pdf', blurb: 'A personal-use workbook for drafting goals and tracking activities. Not accepted for review; the record book is submitted online.' },
+  { title: 'How to submit online (Submittable guide)', url: 'https://www.congressionalaward.org/wp-content/uploads/2021/09/How-to-Guide-for-Submittable.pdf', kind: 'pdf', blurb: 'Step-by-step guide to the online record-book submission portal.' },
+  { title: 'Submittable portal', url: 'https://congressionalaward.submittable.com/submit', kind: 'portal', blurb: 'Where the finished record book is actually submitted for review.' },
+  { title: 'Current participants page', url: 'https://www.congressionalaward.org/current/', kind: 'site', blurb: 'Updates, deadlines and resources for registered participants.' },
+  { title: 'congressionalaward.org', url: 'https://www.congressionalaward.org/', kind: 'site', blurb: 'The program home page — registration, contact details for the national office, and regional program managers.' },
+];

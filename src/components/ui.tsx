@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { AREAS, type AreaKey } from '../data';
 import type { Activity } from '../types';
 import { errorMessage } from '../lib/supabase';
@@ -24,12 +24,50 @@ export const ArrowIcon = () => <Icon size={14}><path d="M5 12h14M13 6l6 6-6 6" /
 
 export const pct = (n: number) => `${Math.round(n)}%`;
 
+/** False on the first paint, true one frame later — lets CSS transitions animate values in from zero. */
+export function useMounted(): boolean {
+  const [m, setM] = useState(false);
+  useEffect(() => { const id = requestAnimationFrame(() => setM(true)); return () => cancelAnimationFrame(id); }, []);
+  return m;
+}
+
+/** Counts from 0 (or the previous value) to `value` over ~700 ms; respects reduced-motion. */
+export function useCountUp(value: number, decimals = 0): string {
+  const [shown, setShown] = useState(0);
+  const from = useRef(0);
+  useEffect(() => {
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduce) { setShown(value); return; }
+    const start = performance.now(), begin = from.current, dur = 700;
+    let raf = 0;
+    const tick = (t: number) => {
+      const k = Math.min(1, (t - start) / dur), e = 1 - Math.pow(1 - k, 3);
+      setShown(begin + (value - begin) * e);
+      if (k < 1) raf = requestAnimationFrame(tick); else from.current = value;
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return shown.toFixed(decimals);
+}
+
 export function Bar({ value, color, thick, track, children }: { value: number; color?: string; thick?: boolean; track?: string; children?: ReactNode }) {
+  const mounted = useMounted();
   return (
     <div className={thick ? 'bar thick' : 'bar'} style={track ? { background: track } : undefined} role="progressbar" aria-valuenow={Math.round(value)} aria-valuemin={0} aria-valuemax={100}>
-      <div className="fill" style={{ '--pct': pct(value), '--fill': color } as CSSProperties} />
+      <div className="fill" style={{ '--pct': pct(mounted ? value : 0), '--fill': color } as CSSProperties} />
       {children}
     </div>
+  );
+}
+
+export function Avatar({ name, url, size = 44, style, className = '' }: { name: string; url?: string | null; size?: number; style?: CSSProperties; className?: string }) {
+  const [broken, setBroken] = useState(false);
+  useEffect(() => setBroken(false), [url]);
+  return (
+    <span className={`avatar ${className}`} style={{ width: size, height: size, fontSize: Math.round(size * 0.36), ...style }} aria-label={name} role="img">
+      {url && !broken ? <img src={url} alt="" onError={() => setBroken(true)} /> : initialsOf(name)}
+    </span>
   );
 }
 

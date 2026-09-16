@@ -1,6 +1,6 @@
 // Pure progress calculations over a participant's data. Nothing here touches the network.
 import { AREAS, GOAL_AREAS, LEVELS, PACE_WEEKS, areaByKey, levelById, type Area, type AreaKey, type Level, type Screen } from './data';
-import type { Activity, Entry, Expedition, Goal, Profile } from './types';
+import type { Activity, Entry, Expedition, Goal, Profile, Resource } from './types';
 import { DAY_MS, addDays, addMonths, addYears, fmtDate, fmtMonth, monthsBetween, parseISODate, startOfToday } from './lib/dates';
 
 export interface Snapshot {
@@ -9,6 +9,7 @@ export interface Snapshot {
   entries: Entry[];
   goals: Goal[];
   expeditions: Expedition[];
+  resources: Resource[];
 }
 
 export const RING_CIRCUMFERENCE = 263.9; // 2π × r42
@@ -274,6 +275,7 @@ export function gettingStarted(s: Snapshot, friendCount: number): StartItem[] {
     { id: 'entry', label: 'Log your first session', done: s.entries.length > 0, screen: 'log', why: 'Four taps: area, activity, duration, save. The rules are checked as you go.' },
     { id: 'exp', label: 'Plan your expedition', done: s.expeditions.length > 0, screen: 'exp', why: 'Even a rough date range lets the dashboard show whether it meets your level.' },
     { id: 'friend', label: 'Add a friend', done: friendCount > 0, screen: 'friends', why: 'Friends see your pace, you see theirs. Nothing else is shared.' },
+    { id: 'resource', label: 'Save a document or link', done: s.resources.length > 0, screen: 'resources', why: 'Validator forms, permits, syllabi — keep them where the record book will need them.' },
   ];
 }
 

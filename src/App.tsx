@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Screen } from './data';
 import { isConfigured } from './lib/supabase';
 import { StoreProvider, usePref, useStore } from './store';
-import { MoonIcon, SunIcon, initialsOf } from './components/ui';
+import { Avatar, MoonIcon, SunIcon } from './components/ui';
 import { AuthScreen } from './auth/AuthScreen';
 import { ResetPassword } from './auth/ResetPassword';
 import { Onboarding } from './onboarding/Onboarding';
@@ -14,9 +14,10 @@ import { Expedition } from './screens/Expedition';
 import { Friends } from './screens/Friends';
 import { RecordBook } from './screens/RecordBook';
 import { Settings } from './screens/Settings';
+import { Resources } from './screens/Resources';
 
 const NAV: [Screen, string][] = [
-  ['dash', 'Dashboard'], ['log', 'Log'], ['goals', 'Goals'], ['exp', 'Expedition'], ['friends', 'Friends'], ['book', 'Record book'],
+  ['dash', 'Dashboard'], ['log', 'Log'], ['goals', 'Goals'], ['exp', 'Expedition'], ['friends', 'Friends'], ['book', 'Record book'], ['resources', 'Resources'],
 ];
 const SCREENS: Screen[] = [...NAV.map(n => n[0]), 'settings'];
 
@@ -85,8 +86,8 @@ function Shell({ theme, setTheme }: { theme: 'light' | 'dark'; setTheme: (t: 'li
           ))}
         </nav>
         {themeButton}
-        <button className="avatar avatar-btn" onClick={() => go('settings')} aria-label="Settings and profile" aria-current={screen === 'settings' ? 'page' : undefined} title="Settings">
-          {initialsOf(snapshot.profile.display_name)}
+        <button className="avatar-btn" onClick={() => go('settings')} aria-label="Settings and profile" aria-current={screen === 'settings' ? 'page' : undefined} title="Settings">
+          <Avatar name={snapshot.profile.display_name} url={snapshot.profile.avatar_url} size={36} style={{ background: 'transparent' }} />
         </button>
         <button className="btn btn-primary" onClick={() => go('log')}>Log activity</button>
       </header>
@@ -97,6 +98,7 @@ function Shell({ theme, setTheme }: { theme: 'light' | 'dark'; setTheme: (t: 'li
         {screen === 'exp' && <Expedition go={go} />}
         {screen === 'friends' && <Friends go={go} />}
         {screen === 'book' && <RecordBook go={go} />}
+        {screen === 'resources' && <Resources go={go} />}
         {screen === 'settings' && <Settings go={go} onReplayTour={() => setReplayTour(true)} />}
       </main>
     </>

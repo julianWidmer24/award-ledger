@@ -176,6 +176,10 @@
   .card { break-inside: avoid; }
 }
 
+/* Resources */
+.resource-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: var(--space-2); }
+.resource-card { display: flex; }
+
 /* Responsive */
 @media (max-width: 1000px) {
   .log-layout { grid-template-columns: 1fr; justify-items: center; }

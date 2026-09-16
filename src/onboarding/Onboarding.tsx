@@ -12,6 +12,7 @@ export function Onboarding({ onDone, replay }: { onDone: () => void; replay: boo
   const s = useSnapshot();
   const p = s.profile;
   const [step, setStep] = useState(0);
+  const [dir, setDir] = useState<'fwd' | 'back'>('fwd');
   const [form, setForm] = useState({
     display_name: p.display_name, school: p.school ?? '', birthday: p.birthday ?? '', registered_on: p.registered_on ?? '', advisor_name: p.advisor_name ?? '',
     target_level: p.target_level as LevelId,
@@ -41,6 +42,7 @@ export function Onboarding({ onDone, replay }: { onDone: () => void; replay: boo
   const next = async () => {
     if (step === 1 && !(await saveProfile(false))) return;
     if (step === 2 && !(await saveProfile(false))) return;
+    setDir('fwd');
     setStep(x => Math.min(STEPS.length - 1, x + 1));
     window.scrollTo({ top: 0 });
   };
@@ -56,8 +58,10 @@ export function Onboarding({ onDone, replay }: { onDone: () => void; replay: boo
           </li>
         ))}
       </ol>
+      <div className="step-progress" aria-hidden="true"><div style={{ width: `${(step + 1) / STEPS.length * 100}%` }} /></div>
 
       <div className="card onboard-card">
+        <div key={step} className={`onboard-panel${dir === 'back' ? ' back' : ''}`}>
         {step === 0 && (
           <Panel kicker={replay ? 'Welcome back' : 'Welcome'} title={replay ? 'A quick tour of Award Ledger' : `Hi ${p.display_name.split(' ')[0]}. Here's how this works.`}>
             <p style={{ fontSize: 15.5, lineHeight: 1.55, maxWidth: '62ch' }}>
@@ -137,10 +141,11 @@ export function Onboarding({ onDone, replay }: { onDone: () => void; replay: boo
           </Panel>
         )}
 
+        </div>
         {error && <Notice kind="block">{error}</Notice>}
 
         <div className="onboard-actions">
-          {step > 0 ? <button className="btn btn-secondary" onClick={() => setStep(x => x - 1)} disabled={busy}>Back</button> : <span />}
+          {step > 0 ? <button className="btn btn-secondary" onClick={() => { setDir('back'); setStep(x => x - 1); }} disabled={busy}>Back</button> : <span />}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {replay && step < STEPS.length - 1 && <button className="btn btn-ghost" onClick={() => void finish()} disabled={busy} style={{ fontFamily: 'var(--font-body)', fontSize: 13 }}>Skip tour</button>}
             {(step === 3 || step === 4) && <span className="small muted">Optional</span>}
