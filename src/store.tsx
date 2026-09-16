@@ -100,7 +100,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         supabase.from('entries').select('*').eq('user_id', uid).order('date', { ascending: false }).order('created_at', { ascending: false }).then(r => must<Entry[]>(r)),
         supabase.from('goals').select('*').eq('user_id', uid).then(r => must<Goal[]>(r)),
         supabase.from('expeditions').select('*').order('start_date').then(r => must<Expedition[]>(r)),
-        supabase.from('expedition_members').select('expedition_id, role, status, reflection, invited_by').eq('user_id', uid).then(r => must<MyMembership[]>(r)),
+        // Tolerate a deploy that lands before the shared-expeditions migration: no members table means "just my own".
+        supabase.from('expedition_members').select('expedition_id, role, status, reflection, invited_by').eq('user_id', uid)
+          .then(r => (r.error && /expedition_members/.test(r.error.message) ? [] : must<MyMembership[]>(r))),
         supabase.rpc('friend_summaries').then(r => must<FriendSummary[]>(r)),
         supabase.rpc('pending_requests').then(r => must<FriendRequest[]>(r)),
         supabase.rpc('my_checkins').then(r => must<Checkin[]>(r)),
