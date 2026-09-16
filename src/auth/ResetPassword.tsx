@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
-import { Field, Notice, useAsync } from '../components/ui';
+import { Field, Logo, Notice, useAsync } from '../components/ui';
 
 /** Shown after the user follows a password-reset email link (Supabase fires PASSWORD_RECOVERY). */
 export function ResetPassword({ onDone }: { onDone: () => void }) {
@@ -22,7 +22,7 @@ export function ResetPassword({ onDone }: { onDone: () => void }) {
   return (
     <div className="auth-wrap" style={{ gridTemplateColumns: 'minmax(0, 1fr)', maxWidth: 520 }}>
       <form className="card auth-card" onSubmit={submit}>
-        <div className="nav-brand" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="brand-dot" />Award Ledger</div>
+        <div className="nav-brand"><Logo size={26} /></div>
         <h2 style={{ margin: 0 }}>Choose a new password</h2>
         <p className="text-muted" style={{ margin: 0, fontSize: 14 }}>You're signed in through the reset link. Pick a new password and you'll go straight to your dashboard.</p>
         <Field label="New password" hint="At least 8 characters.">

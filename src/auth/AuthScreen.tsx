@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { supabase } from '../lib/supabase';
-import { Field, Notice, useAsync } from '../components/ui';
+import { Field, Logo, Notice, useAsync } from '../components/ui';
 
 type Mode = 'signin' | 'signup' | 'forgot';
 
@@ -35,7 +35,7 @@ export function AuthScreen() {
   return (
     <div className="auth-wrap">
       <div className="auth-intro">
-        <div className="nav-brand" style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 22 }}><span className="brand-dot" />Award Ledger</div>
+        <div className="nav-brand" style={{ fontSize: 22 }}><Logo size={34} /></div>
         <h1 style={{ margin: '18px 0 8px', fontSize: 40 }}>Track your Congressional Award, together.</h1>
         <p className="text-muted" style={{ fontSize: 15, maxWidth: '44ch' }}>
           Log hours in the three program areas, plan your expedition, keep validators and goals in one place, and see whether you and your friends are on pace for the level you're aiming at.

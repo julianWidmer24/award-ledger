@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import type { Screen } from './data';
 import { isConfigured } from './lib/supabase';
 import { StoreProvider, usePref, useStore } from './store';
-import { Avatar, MoonIcon, SunIcon } from './components/ui';
+import { Avatar, Logo, MoonIcon, SunIcon } from './components/ui';
 import { AuthScreen } from './auth/AuthScreen';
 import { ResetPassword } from './auth/ResetPassword';
 import { Onboarding } from './onboarding/Onboarding';
@@ -79,7 +79,7 @@ function Shell({ theme, setTheme }: { theme: 'light' | 'dark'; setTheme: (t: 'li
   return (
     <>
       <header className="nav app-nav">
-        <div className="nav-brand" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="brand-dot" />Award Ledger</div>
+        <div className="nav-brand"><Logo size={26} /></div>
         <nav className="links" aria-label="Main">
           {NAV.map(([key, label]) => (
             <a key={key} href={key === 'dash' ? '#' : `#/${key}`} aria-current={screen === key ? 'page' : undefined} onClick={e => { e.preventDefault(); go(key); }}>{label}</a>

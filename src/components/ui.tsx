@@ -157,3 +157,13 @@ export const cleanDraft = (d: ActivityDraft) => ({
   area: d.area, name: d.name.trim(),
   validator_name: d.validator_name.trim() || null, validator_title: d.validator_title.trim() || null, validator_contact: d.validator_contact.trim() || null,
 });
+
+/** Brand mark + wordmark. `size` is the star's height in px. */
+export function Logo({ size = 22, wordmark = true, style }: { size?: number; wordmark?: boolean; style?: CSSProperties }) {
+  return (
+    <span className="logo" style={{ display: 'inline-flex', alignItems: 'center', gap: Math.round(size * 0.4), ...style }}>
+      <img src="/logo.png" alt="" width={size} height={size} style={{ display: 'block', width: size, height: size }} />
+      {wordmark && <span>Award Ledger</span>}
+    </span>
+  );
+}

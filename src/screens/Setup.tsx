@@ -1,9 +1,10 @@
+import { Logo } from '../components/ui';
 /** Shown when .env.local has no Supabase credentials yet. */
 export function Setup() {
   return (
     <div className="auth-wrap" style={{ gridTemplateColumns: 'minmax(0, 1fr)', maxWidth: 720 }}>
       <div className="card" style={{ padding: 'var(--space-6)', gap: 'var(--space-3)' }}>
-        <div className="nav-brand" style={{ display: 'flex', alignItems: 'center', gap: 10 }}><span className="brand-dot" />Award Ledger</div>
+        <div className="nav-brand"><Logo size={26} /></div>
         <h2 style={{ margin: 0 }}>Connect a Supabase project</h2>
         <p className="text-muted" style={{ margin: 0 }}>The app needs a database before anyone can sign in. This takes about five minutes.</p>
         <ol style={{ margin: 0, paddingLeft: 22, display: 'grid', gap: 10, fontSize: 14.5, lineHeight: 1.5 }}>
