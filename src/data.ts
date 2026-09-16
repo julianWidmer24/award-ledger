@@ -3,9 +3,9 @@
 export type AreaKey = 'vps' | 'pd' | 'pf';
 export type GoalArea = AreaKey | 'exp';
 export type LevelId = 'bc' | 'sc' | 'gc' | 'bm' | 'sm' | 'gm';
-export type Screen = 'dash' | 'log' | 'goals' | 'exp' | 'friends' | 'book' | 'resources' | 'settings';
+export type Screen = 'dash' | 'log' | 'goals' | 'exp' | 'friends' | 'friend' | 'book' | 'resources' | 'settings';
 export type DashboardLayout = 'rings' | 'ledger' | 'pace';
-export type ShareKey = 'hours' | 'target' | 'week' | 'activities';
+export type ShareKey = 'hours' | 'target' | 'week' | 'activities' | 'goals' | 'logs';
 
 export interface Level {
   id: LevelId; name: string; short: string;
@@ -56,7 +56,12 @@ export const SHARE: [ShareKey, string, string][] = [
   ['target', 'Target level and pace', 'On pace / behind, no numbers behind it'],
   ['week', 'Hours this week', 'Resets Monday'],
   ['activities', 'Activity names', 'e.g. "ED volunteering" — never descriptions or validators'],
+  ['goals', 'Written goals', 'Title, statement and whether the advisor has signed'],
+  ['logs', 'Your log', 'Date, activity, area and hours per entry — never what you wrote or who validated'],
 ];
+
+/** Sharing keys added after launch default to on for existing profiles. */
+export const shareOn = (sharing: Partial<Record<ShareKey, boolean>>, key: ShareKey) => sharing[key] ?? (key !== 'activities');
 
 export const LOG_RULES = [
   'Hours only count after your program registration date. Nothing retroactive.',

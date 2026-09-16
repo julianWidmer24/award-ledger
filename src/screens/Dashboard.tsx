@@ -168,7 +168,7 @@ export function Dashboard({ go }: ScreenProps) {
   );
 }
 
-const SCREEN_NAMES = { dash: 'Dashboard', log: 'Log', goals: 'Goals', exp: 'Expedition', friends: 'Friends', book: 'Record book', resources: 'Resources', settings: 'Settings' } as const;
+const SCREEN_NAMES = { dash: 'Dashboard', log: 'Log', goals: 'Goals', exp: 'Expedition', friends: 'Friends', friend: 'Friend', book: 'Record book', resources: 'Resources', settings: 'Settings' } as const;
 
 function CountUp({ value, decimals = 0, className, style }: { value: number; decimals?: number; className?: string; style?: CSSProperties }) {
   const shown = useCountUp(value, decimals);

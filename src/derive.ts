@@ -1,6 +1,6 @@
 // Pure progress calculations over a participant's data. Nothing here touches the network.
 import { AREAS, GOAL_AREAS, LEVELS, PACE_WEEKS, areaByKey, levelById, type Area, type AreaKey, type Level, type Screen } from './data';
-import type { Activity, Entry, Expedition, Goal, Profile, Resource } from './types';
+import type { Activity, Entry, Expedition, ExpeditionInvite, Goal, MyMembership, Profile, Resource } from './types';
 import { DAY_MS, addDays, addMonths, addYears, fmtDate, fmtMonth, monthsBetween, parseISODate, startOfToday } from './lib/dates';
 
 export interface Snapshot {
@@ -8,7 +8,9 @@ export interface Snapshot {
   activities: Activity[];
   entries: Entry[];
   goals: Goal[];
-  expeditions: Expedition[];
+  expeditions: Expedition[];          // owned + accepted shared
+  memberships: MyMembership[];
+  expeditionInvites: ExpeditionInvite[];
   resources: Resource[];
 }
 
@@ -194,6 +196,9 @@ export function tasks(s: Snapshot, target: Level, t: Timeline): DerivedTask[] {
     if (!a.onPace && a.remaining > 0) {
       out.push({ id: 'pace-' + a.key, title: `${a.name} is behind pace`, sub: `Logging ${a.pace.toFixed(1)} h/wk, need ${a.need.toFixed(1)} h/wk to finish by your deadline`, screen: 'log', urgent: true });
     }
+  }
+  for (const inv of s.expeditionInvites) {
+    out.push({ id: 'inv-' + inv.expedition.id, title: `${inv.invitedByName ?? 'A friend'} invited you to “${inv.expedition.name}”`, sub: 'Accept to plan it together and have it count toward your expedition', screen: 'exp', urgent: true });
   }
   const credit = expeditionCredit(s);
   if (!expeditionMeets(target, credit) && !s.expeditions.some(x => x.status === 'planned')) {

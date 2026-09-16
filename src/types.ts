@@ -11,7 +11,7 @@ export interface Profile {
   registered_on: string | null; // YYYY-MM-DD
   target_level: LevelId;
   advisor_name: string | null;
-  sharing: Record<ShareKey, boolean>;
+  sharing: Partial<Record<ShareKey, boolean>>;
   onboarded_at: string | null;
   created_at: string;
 }
@@ -124,4 +124,37 @@ export interface Resource {
   category: ResourceCategory;
   notes: string | null;
   created_at: string;
+}
+
+export interface ExpeditionMember {
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  role: 'owner' | 'member';
+  status: 'invited' | 'accepted';
+  invited_by_name: string | null;
+}
+
+/** My own membership row (reflection is personal, one per member). */
+export interface MyMembership {
+  expedition_id: string;
+  role: 'owner' | 'member';
+  status: 'invited' | 'accepted';
+  reflection: string | null;
+  invited_by: string | null;
+}
+
+export interface ExpeditionInvite { expedition: Expedition; invitedByName: string | null }
+
+export interface FriendProfile {
+  id: string;
+  display_name: string;
+  school: string | null;
+  avatar_url: string | null;
+  registered_on: string | null;
+  target_level: LevelId | null;
+  shares: { goals: boolean; logs: boolean; hours: boolean; target: boolean };
+  hours: Partial<Record<AreaKey, number>> | null;
+  goals: { area: GoalArea; title: string; text: string; status: GoalStatus; version: number; dated: string }[] | null;
+  entries: { id: string; date: string; hours: number; status: EntryStatus; activity: string; area: AreaKey }[] | null;
 }

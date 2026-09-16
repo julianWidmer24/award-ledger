@@ -15,34 +15,38 @@ import { Friends } from './screens/Friends';
 import { RecordBook } from './screens/RecordBook';
 import { Settings } from './screens/Settings';
 import { Resources } from './screens/Resources';
+import { FriendProfileScreen } from './screens/FriendProfile';
 
 const NAV: [Screen, string][] = [
   ['dash', 'Dashboard'], ['log', 'Log'], ['goals', 'Goals'], ['exp', 'Expedition'], ['friends', 'Friends'], ['book', 'Record book'], ['resources', 'Resources'],
 ];
-const SCREENS: Screen[] = [...NAV.map(n => n[0]), 'settings'];
+const SCREENS: Screen[] = [...NAV.map(n => n[0]), 'settings', 'friend'];
 
-const screenFromHash = (): Screen => {
-  const h = window.location.hash.replace(/^#\/?/, '') as Screen;
-  return SCREENS.includes(h) ? h : 'dash';
+interface Route { screen: Screen; param?: string }
+
+const routeFromHash = (): Route => {
+  const [h, param] = window.location.hash.replace(/^#\/?/, '').split('/');
+  const screen = h as Screen;
+  return SCREENS.includes(screen) ? { screen, param } : { screen: 'dash' };
 };
 
-/** Current screen, mirrored in the URL hash so reloads and back/forward work. */
-function useScreen(): [Screen, (s: Screen) => void] {
-  const [screen, setScreen] = useState<Screen>(screenFromHash);
+/** Current screen (+ optional id), mirrored in the URL hash so reloads and back/forward work. */
+function useScreen(): [Route, (s: Screen, param?: string) => void] {
+  const [route, setRoute] = useState<Route>(routeFromHash);
   useEffect(() => {
-    const onHash = () => setScreen(screenFromHash());
+    const onHash = () => setRoute(routeFromHash());
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
-  const go = useCallback((s: Screen) => {
-    window.location.hash = s === 'dash' ? '' : `/${s}`;
-    setScreen(s);
+  const go = useCallback((s: Screen, param?: string) => {
+    window.location.hash = s === 'dash' ? '' : `/${s}${param ? '/' + param : ''}`;
+    setRoute({ screen: s, param });
     window.scrollTo({ top: 0 });
   }, []);
-  return [screen, go];
+  return [route, go];
 }
 
-export interface ScreenProps { go: (s: Screen) => void }
+export interface ScreenProps { go: (s: Screen, param?: string) => void }
 
 export function App() {
   const [theme, setTheme] = usePref<'light' | 'dark'>('theme', 'light');
@@ -57,7 +61,7 @@ export function App() {
 
 function Shell({ theme, setTheme }: { theme: 'light' | 'dark'; setTheme: (t: 'light' | 'dark') => void }) {
   const { session, authReady, recovering, setRecovering, snapshot, loading, error, reload, api } = useStore();
-  const [screen, go] = useScreen();
+  const [{ screen, param }, go] = useScreen();
   const dark = theme === 'dark';
   const [replayTour, setReplayTour] = useState(false);
 
@@ -82,7 +86,7 @@ function Shell({ theme, setTheme }: { theme: 'light' | 'dark'; setTheme: (t: 'li
         <div className="nav-brand"><Logo size={26} /></div>
         <nav className="links desktop-only" aria-label="Main">
           {NAV.map(([key, label]) => (
-            <a key={key} href={key === 'dash' ? '#' : `#/${key}`} aria-current={screen === key ? 'page' : undefined} onClick={e => { e.preventDefault(); go(key); }}>{label}</a>
+            <a key={key} href={key === 'dash' ? '#' : `#/${key}`} aria-current={screen === key || (key === 'friends' && screen === 'friend') ? 'page' : undefined} onClick={e => { e.preventDefault(); go(key); }}>{label}</a>
           ))}
         </nav>
         {themeButton}
@@ -98,6 +102,7 @@ function Shell({ theme, setTheme }: { theme: 'light' | 'dark'; setTheme: (t: 'li
         {screen === 'goals' && <Goals go={go} />}
         {screen === 'exp' && <Expedition go={go} />}
         {screen === 'friends' && <Friends go={go} />}
+        {screen === 'friend' && <FriendProfileScreen go={go} friendId={param ?? ''} />}
         {screen === 'book' && <RecordBook go={go} />}
         {screen === 'resources' && <Resources go={go} />}
         {screen === 'settings' && <Settings go={go} onReplayTour={() => setReplayTour(true)} />}
@@ -117,9 +122,10 @@ const MORE: { key: Screen; label: string }[] = [
 ];
 
 /** Bottom tab bar for phones; hidden on wider screens where the header links show. */
-function MobileNav({ screen, go }: { screen: Screen; go: (s: Screen) => void }) {
+function MobileNav({ screen, go }: { screen: Screen; go: (s: Screen, param?: string) => void }) {
   const [more, setMore] = useState(false);
   const moreActive = MORE.some(m => m.key === screen);
+  const tabActive = (k: Screen) => screen === k || (k === 'friends' && screen === 'friend');
   // Close the sheet whenever navigation happens (tab, hash, back button) or Escape is pressed.
   useEffect(() => setMore(false), [screen]);
   useEffect(() => {
@@ -139,7 +145,7 @@ function MobileNav({ screen, go }: { screen: Screen; go: (s: Screen) => void }) 
           </div>
         )}
         {TABS.map(t => (
-          <button key={t.key} className={`tab${screen === t.key ? ' on' : ''}`} aria-current={screen === t.key ? 'page' : undefined} onClick={() => pick(t.key)}>
+          <button key={t.key} className={`tab${tabActive(t.key) ? ' on' : ''}`} aria-current={tabActive(t.key) ? 'page' : undefined} onClick={() => pick(t.key)}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{t.icon}</svg>
             <span>{t.label}</span>
           </button>

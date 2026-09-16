@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
 import type { ScreenProps } from '../App';
-import { AREAS, SHARE, levelById } from '../data';
+import { AREAS, SHARE, levelById, shareOn } from '../data';
 import { areaProgress, timeline, weekHours } from '../derive';
 import { fmtISO, parseISODate, startOfToday, timeAgo } from '../lib/dates';
 import { useSnapshot, useStore } from '../store';
@@ -8,7 +8,7 @@ import { Avatar, Bar, Field, Notice, ringColor, useAsync } from '../components/u
 import type { FriendSummary } from '../types';
 import { DAY_MS, fmtMonth } from '../lib/dates';
 
-export function Friends(_: ScreenProps) {
+export function Friends({ go }: ScreenProps) {
   const s = useSnapshot();
   const { api, social, session } = useStore();
   const [inviteOpen, setInviteOpen] = useState(social.friends.length === 0 && social.requests.length === 0);
@@ -65,7 +65,7 @@ export function Friends(_: ScreenProps) {
           {social.friends.length === 0 && social.requests.length === 0 && (
             <div className="card pad"><p className="card-body plain">No friends yet. Share your code <strong>{s.profile.friend_code}</strong> with someone doing the award, or enter theirs above.</p></div>
           )}
-          {social.friends.map(fr => <FriendCard key={fr.id} fr={fr} myWeek={myWeek} me={me} />)}
+          {social.friends.map(fr => <FriendCard key={fr.id} fr={fr} myWeek={myWeek} me={me} onView={() => go('friend', fr.id)} />)}
         </div>
 
         <div className="stack">
@@ -74,11 +74,11 @@ export function Friends(_: ScreenProps) {
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
               <Avatar name={s.profile.display_name} url={s.profile.avatar_url} style={{ background: 'var(--color-accent-2-300)', color: 'var(--color-accent-2-900)' }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18 }}>{s.profile.sharing.target ? myTarget.name : 'Target hidden'}</div>
-                <div className="muted" style={{ fontSize: 12.5 }}>{s.profile.sharing.week ? `${myWeek} h this week` : 'Weekly hours hidden'}{t.deadline ? ` · ${t.timePct}% of time used` : ''}</div>
+                <div style={{ fontFamily: 'var(--font-heading)', fontSize: 18 }}>{shareOn(s.profile.sharing, 'target') ? myTarget.name : 'Target hidden'}</div>
+                <div className="muted" style={{ fontSize: 12.5 }}>{shareOn(s.profile.sharing, 'week') ? `${myWeek} h this week` : 'Weekly hours hidden'}{t.deadline ? ` · ${t.timePct}% of time used` : ''}</div>
               </div>
             </div>
-            {s.profile.sharing.hours ? (
+            {shareOn(s.profile.sharing, 'hours') ? (
               <div style={{ display: 'grid', gap: 8 }}>
                 {myAreas.map(a => (
                   <div key={a.key} style={{ display: 'grid', gap: 4 }}>
@@ -95,8 +95,8 @@ export function Friends(_: ScreenProps) {
             {SHARE.map(([key, label, sub]) => (
               <label key={key} className="toggle-row" style={{ minHeight: 40 }}>
                 <span style={{ display: 'grid' }}><span>{label}</span><span className="small muted">{sub}</span></span>
-                <input type="checkbox" className="checkbox" checked={s.profile.sharing[key]} disabled={act.busy}
-                  onChange={() => void act.run(() => api.updateProfile({ sharing: { ...s.profile.sharing, [key]: !s.profile.sharing[key] } }))} />
+                <input type="checkbox" className="checkbox" checked={shareOn(s.profile.sharing, key)} disabled={act.busy}
+                  onChange={() => void act.run(() => api.updateProfile({ sharing: { ...s.profile.sharing, [key]: !shareOn(s.profile.sharing, key) } }))} />
               </label>
             ))}
           </div>
@@ -120,7 +120,7 @@ export function Friends(_: ScreenProps) {
   );
 }
 
-function FriendCard({ fr, myWeek, me }: { fr: FriendSummary; myWeek: number; me?: string }) {
+function FriendCard({ fr, myWeek, me, onView }: { fr: FriendSummary; myWeek: number; me?: string; onView: () => void }) {
   const { api, social } = useStore();
   const [open, setOpen] = useState(false);
   const [msg, setMsg] = useState('');
@@ -147,7 +147,7 @@ function FriendCard({ fr, myWeek, me }: { fr: FriendSummary; myWeek: number; me?
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
         <Avatar name={fr.display_name} url={fr.avatar_url} style={{ background: on ? 'var(--color-accent-2-200)' : 'var(--color-accent-200)', color: on ? 'var(--color-accent-2-900)' : 'var(--color-accent-900)' }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}><span style={{ fontFamily: 'var(--font-heading)', fontSize: 18 }}>{fr.display_name}</span>{fr.school && <span className="text-muted" style={{ fontSize: 12.5 }}>{fr.school}</span>}</div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}><button className="link-btn" onClick={onView} style={{ fontFamily: 'var(--font-heading)', fontSize: 18, color: 'inherit', textDecoration: 'none' }}>{fr.display_name}</button>{fr.school && <span className="text-muted" style={{ fontSize: 12.5 }}>{fr.school}</span>}</div>
           <div className="muted" style={{ fontSize: 12.5 }}>
             {lv ? `Target ${lv.short}` : 'Target hidden'}{fr.registered_on ? ` · registered ${fmtMonth(parseISODate(fr.registered_on)!)}` : ''} · {fr.last_logged ? `last logged ${fmtISO(fr.last_logged)}` : 'nothing logged yet'}
           </div>
@@ -170,6 +170,7 @@ function FriendCard({ fr, myWeek, me }: { fr: FriendSummary; myWeek: number; me?
           This week: <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{fr.week_hours ?? '—'}&nbsp;h</strong> · you: <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{myWeek}&nbsp;h</strong>
         </span>
         <span className="row" style={{ gap: 4 }}>
+          <button className="btn btn-secondary" onClick={onView} style={{ padding: '6px 12px', fontSize: 13 }}>View profile</button>
           <button className="link-btn small" disabled={busy} onClick={() => { if (confirm(`Remove ${fr.display_name} as a friend?`)) void run(() => api.removeFriend(fr.friendship_id)); }}>Remove</button>
           <button className="btn btn-ghost" disabled={busy || recentlyNudged} onClick={() => setOpen(o => !o)} style={{ fontFamily: 'var(--font-body)', fontSize: 13, padding: '6px 12px' }}>{recentlyNudged ? 'Check-in sent' : 'Send a check-in'}</button>
         </span>

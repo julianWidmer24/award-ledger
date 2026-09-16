@@ -1,26 +1,28 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { ScreenProps } from '../App';
 import { levelById } from '../data';
 import { expeditionCredit, expeditionMeets, expeditionNights, ladder, timeline } from '../derive';
 import { fmtISO, parseISODate, startOfToday } from '../lib/dates';
 import { useSnapshot, useStore } from '../store';
-import { CheckIcon, Field, Notice, useAsync } from '../components/ui';
-import type { Expedition as Exp, ItineraryDay } from '../types';
+import { Avatar, CheckIcon, Field, Notice, useAsync } from '../components/ui';
+import type { Expedition as Exp, ExpeditionMember, ItineraryDay } from '../types';
 
-type Draft = Omit<Exp, 'id' | 'user_id' | 'created_at'> & { id?: string };
+type Draft = Omit<Exp, 'id' | 'user_id' | 'created_at' | 'reflection'> & { id?: string };
 
-const blank = (): Draft => ({ name: '', location: '', start_date: '', end_date: '', status: 'planned', purpose: '', itinerary: [], validator_name: '', validator_title: '', validator_contact: '', reflection: '' });
+const blank = (): Draft => ({ name: '', location: '', start_date: '', end_date: '', status: 'planned', purpose: '', itinerary: [], validator_name: '', validator_title: '', validator_contact: '' });
 
-export function Expedition(_: ScreenProps) {
+export function Expedition({ go }: ScreenProps) {
   const s = useSnapshot();
-  const { api } = useStore();
+  const { api, session } = useStore();
+  const me = session?.user.id ?? '';
   const t = timeline(s.profile);
   const target = levelById(s.profile.target_level);
   const steps = ladder(s, t);
   const credit = expeditionCredit(s);
   const [selectedId, setSelectedId] = useState<string | null>(s.expeditions.find(x => x.status === 'planned')?.id ?? s.expeditions[0]?.id ?? null);
-  const [editing, setEditing] = useState<Draft | null>(s.expeditions.length ? null : blank());
-  const selected = s.expeditions.find(x => x.id === selectedId) ?? null;
+  const [editing, setEditing] = useState<Draft | null>(s.expeditions.length || s.expeditionInvites.length ? null : blank());
+  const selected = s.expeditions.find(x => x.id === selectedId) ?? (selectedId === null ? null : s.expeditions[0] ?? null);
+  const invites = useAsync();
 
   return (
     <section className="screen" aria-label="Expedition planner">
@@ -28,7 +30,7 @@ export function Expedition(_: ScreenProps) {
         <div>
           <h6 className="eyebrow">Expedition planner</h6>
           <h1 style={{ margin: 0 }}>{selected && !editing ? selected.name : editing?.id ? 'Edit expedition' : editing ? 'Plan an expedition' : 'Expeditions'}</h1>
-          <p className="text-muted lede">{selected && !editing ? selected.location || 'Location not set' : `${target.short} requires ${target.expText}, consecutive, in an unfamiliar environment.`}</p>
+          <p className="text-muted lede">{selected && !editing ? selected.location || 'Location not set' : `${target.short} requires ${target.expText}, consecutive, in an unfamiliar environment. Plan it alone or with friends — a shared trip counts for everyone on it.`}</p>
         </div>
         <div className="row">
           {selected && !editing && <StatusTags x={selected} targetShort={target.short} meets={expeditionMeets(target, { nights: expeditionNights(selected), days: expeditionNights(selected) + 1 })} />}
@@ -36,20 +38,35 @@ export function Expedition(_: ScreenProps) {
         </div>
       </div>
 
+      {s.expeditionInvites.map(inv => (
+        <div key={inv.expedition.id} className="card" style={{ padding: 'var(--space-3) var(--space-4)', flexDirection: 'row', alignItems: 'center', gap: 'var(--space-3)', background: 'var(--color-accent-100)', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div className="card-kicker">Invitation</div>
+            <div style={{ fontWeight: 600 }}>{inv.invitedByName ?? 'A friend'} invited you to “{inv.expedition.name}”</div>
+            <div className="muted" style={{ fontSize: 12.5 }}>{fmtISO(inv.expedition.start_date)} – {fmtISO(inv.expedition.end_date)} · {expeditionNights(inv.expedition)} overnights{inv.expedition.location ? ` · ${inv.expedition.location}` : ''}</div>
+          </div>
+          <button className="btn btn-secondary" disabled={invites.busy} onClick={() => void invites.run(() => api.respondExpeditionInvite(inv.expedition.id, false))}>Decline</button>
+          <button className="btn btn-primary" disabled={invites.busy} onClick={() => void invites.run(async () => { await api.respondExpeditionInvite(inv.expedition.id, true); setSelectedId(inv.expedition.id); })}>Join</button>
+        </div>
+      ))}
+      {invites.error && <Notice kind="block">{invites.error}</Notice>}
+
       <div className="split">
         <div className="stack">
           {s.expeditions.length > 1 && !editing && (
             <div className="row">
-              {s.expeditions.map(x => <button key={x.id} className={`chip${x.id === selectedId ? ' on' : ''}`} onClick={() => setSelectedId(x.id)}>{x.name}</button>)}
+              {s.expeditions.map(x => <button key={x.id} className={`chip${x.id === selected?.id ? ' on' : ''}`} onClick={() => setSelectedId(x.id)}>{x.name}{x.user_id !== me ? ' · shared' : ''}</button>)}
             </div>
           )}
           {editing ? (
-            <ExpeditionForm draft={editing} onCancel={s.expeditions.length ? () => setEditing(null) : undefined}
-              onSave={async d => { await api.saveExpedition({ ...d, location: d.location || null, purpose: d.purpose || null, reflection: d.reflection || null, validator_name: d.validator_name || null, validator_title: d.validator_title || null, validator_contact: d.validator_contact || null }); setEditing(null); }}
+            <ExpeditionForm draft={editing} isOwner={!editing.id || s.expeditions.find(x => x.id === editing.id)?.user_id === me} onCancel={s.expeditions.length || s.expeditionInvites.length ? () => setEditing(null) : undefined}
+              onSave={async d => { await api.saveExpedition({ ...d, location: d.location || null, purpose: d.purpose || null, validator_name: d.validator_name || null, validator_title: d.validator_title || null, validator_contact: d.validator_contact || null }); setEditing(null); }}
               onDelete={editing.id ? async () => { await api.deleteExpedition(editing.id!); setEditing(null); setSelectedId(null); } : undefined} />
           ) : selected ? (
-            <ExpeditionView x={selected} onEdit={() => setEditing({ ...selected, location: selected.location ?? '', purpose: selected.purpose ?? '', reflection: selected.reflection ?? '', validator_name: selected.validator_name ?? '', validator_title: selected.validator_title ?? '', validator_contact: selected.validator_contact ?? '' })} />
-          ) : null}
+            <ExpeditionView key={selected.id} x={selected} me={me} onEdit={() => setEditing({ ...selected, location: selected.location ?? '', purpose: selected.purpose ?? '', validator_name: selected.validator_name ?? '', validator_title: selected.validator_title ?? '', validator_contact: selected.validator_contact ?? '' })} onLeft={() => setSelectedId(null)} go={go} />
+          ) : (
+            <div className="card pad"><p className="card-body plain">No expeditions yet. Plan one, or wait for a friend to invite you to theirs.</p></div>
+          )}
         </div>
 
         <div className="stack">
@@ -63,7 +80,7 @@ export function Expedition(_: ScreenProps) {
                 </div>
               ))}
             </div>
-            <p className="card-body plain" style={{ marginTop: 4 }}>Nights are counted within one continuous trip; two separate weekends don't add up.</p>
+            <p className="card-body plain" style={{ marginTop: 4 }}>Nights are counted within one continuous trip; two separate weekends don't add up. A shared expedition counts for every member who joined it.</p>
           </div>
           <div className="card pad">
             <div className="card-kicker">Completed</div>
@@ -90,14 +107,29 @@ function StatusTags({ x, targetShort, meets }: { x: Exp; targetShort: string; me
   );
 }
 
-function ExpeditionView({ x, onEdit }: { x: Exp; onEdit: () => void }) {
+function ExpeditionView({ x, me, onEdit, onLeft, go }: { x: Exp; me: string; onEdit: () => void; onLeft: () => void; go: ScreenProps['go'] }) {
+  const s = useSnapshot();
+  const { api, social } = useStore();
+  const isOwner = x.user_id === me;
+  const mine = s.memberships.find(m => m.expedition_id === x.id);
+  const [members, setMembers] = useState<ExpeditionMember[]>([]);
+  const [inviteId, setInviteId] = useState('');
+  const [reflection, setReflection] = useState(mine?.reflection ?? '');
+  const act = useAsync();
   const nights = expeditionNights(x);
   const end = parseISODate(x.end_date);
   const past = end ? end < startOfToday() : false;
+  const accepted = members.filter(m => m.status === 'accepted');
+  const invitable = social.friends.filter(f => !members.some(m => m.user_id === f.id));
+
+  const loadMembers = () => api.expeditionMembers(x.id).then(setMembers).catch(() => setMembers([]));
+  useEffect(() => { void loadMembers(); /* eslint-disable-line */ }, [x.id, s.memberships.length]);
+  useEffect(() => setReflection(mine?.reflection ?? ''), [mine?.reflection]);
+
   return (
     <>
       <div className="card pad" style={{ gap: 'var(--space-3)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div className="card-kicker">Dates</div><button className="btn btn-ghost" onClick={onEdit} style={{ fontFamily: 'var(--font-body)', fontSize: 13, padding: '4px 10px' }}>Edit</button></div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><div className="card-kicker">Dates</div><button className="btn btn-ghost" onClick={onEdit} style={{ fontFamily: 'var(--font-body)', fontSize: 13, padding: '4px 10px' }}>Edit plan</button></div>
         <div className="dates-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 130px', gap: 'var(--space-6)', alignItems: 'end' }}>
           <div><div className="label-sm">Start</div><div style={{ fontWeight: 600 }}>{fmtISO(x.start_date)}</div></div>
           <div><div className="label-sm">End</div><div style={{ fontWeight: 600 }}>{fmtISO(x.end_date)}</div></div>
@@ -105,6 +137,42 @@ function ExpeditionView({ x, onEdit }: { x: Exp; onEdit: () => void }) {
         </div>
         {nights > 0 && <div style={{ display: 'flex', gap: 6 }}>{Array.from({ length: Math.min(nights, 14) }, (_, i) => <div key={i} style={{ flex: 1, height: 10, borderRadius: 999, background: 'var(--color-accent-2)' }} title={`Night ${i + 1}`} />)}</div>}
       </div>
+
+      <div className="card pad" style={{ gap: 'var(--space-3)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <div className="card-kicker">Going together · {accepted.length || 1}</div>
+          {!isOwner && mine && <button className="link-btn small" disabled={act.busy} onClick={() => { if (confirm(`Leave “${x.name}”? It will stop counting toward your expedition.`)) void act.run(async () => { await api.leaveExpedition(x.id); onLeft(); }); }}>Leave this expedition</button>}
+        </div>
+        <div style={{ display: 'grid', gap: 8 }}>
+          {members.map(m => (
+            <div key={m.user_id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Avatar name={m.display_name} url={m.avatar_url} size={34} style={{ background: 'var(--color-accent-2-200)', color: 'var(--color-accent-2-900)' }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontWeight: 600 }}>{m.user_id === me ? 'You' : m.display_name}</span>
+                <span className="small muted"> · {m.role === 'owner' ? 'planner' : m.status === 'invited' ? 'invited, not yet joined' : 'member'}</span>
+              </div>
+              {m.user_id !== me && m.user_id !== x.user_id && <button className="link-btn small" onClick={() => go('friend', m.user_id)}>Profile</button>}
+              {isOwner && m.user_id !== me && <button className="link-btn small" disabled={act.busy} onClick={() => { if (confirm(`Remove ${m.display_name} from this expedition?`)) void act.run(async () => { await api.removeExpeditionMember(x.id, m.user_id); await loadMembers(); }); }}>Remove</button>}
+            </div>
+          ))}
+        </div>
+        {isOwner && (
+          invitable.length ? (
+            <form style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, alignItems: 'end' }} onSubmit={e => { e.preventDefault(); if (inviteId) void act.run(async () => { await api.inviteToExpedition(x.id, inviteId); setInviteId(''); await loadMembers(); }); }}>
+              <Field label="Invite a friend to plan and go together">
+                <select className="input" value={inviteId} onChange={e => setInviteId(e.target.value)}>
+                  <option value="">Choose a friend…</option>
+                  {invitable.map(f => <option key={f.id} value={f.id}>{f.display_name}</option>)}
+                </select>
+              </Field>
+              <button type="submit" className="btn btn-secondary" disabled={act.busy || !inviteId}>Invite</button>
+            </form>
+          ) : <p className="card-body plain">{social.friends.length ? 'All your friends are already on this trip.' : 'Add friends on the Friends page to invite them along.'}</p>
+        )}
+        {!isOwner && <p className="card-body plain">Anyone who has joined can edit the plan. Only the planner can invite people or delete the trip.</p>}
+        {act.error && <Notice kind="block">{act.error}</Notice>}
+      </div>
+
       {x.itinerary.length > 0 && (
         <div className="card pad" style={{ gap: 'var(--space-3)' }}>
           <div className="card-kicker">Itinerary</div>
@@ -120,22 +188,34 @@ function ExpeditionView({ x, onEdit }: { x: Exp; onEdit: () => void }) {
         <div className="card-kicker">Purpose statement</div>
         {x.purpose ? <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.5 }}>{x.purpose}</p> : <p className="card-body plain">Not written yet. What do you want to learn or achieve, and how does it stretch you?</p>}
       </div>
-      <div className="card pad" style={{ gap: 'var(--space-3)', border: x.reflection ? undefined : '1px dashed var(--color-divider)', background: x.reflection ? undefined : 'transparent' }}>
-        <div className="card-kicker" style={{ color: x.reflection ? undefined : 'var(--color-neutral-600)' }}>Post-trip reflection</div>
-        {x.reflection ? <p style={{ margin: 0, fontSize: 14.5, lineHeight: 1.5 }}>{x.reflection}</p>
-          : <p className="card-body plain">{past ? 'The trip is over — edit it, mark it completed, and write what you planned, what happened, and what you would change.' : `Unlocks after ${fmtISO(x.end_date)}. The record book asks what you planned, what happened, and what you would change.`}</p>}
-      </div>
+
+      <form className="card pad" style={{ gap: 'var(--space-3)', border: mine?.reflection ? undefined : '1px dashed var(--color-divider)', background: mine?.reflection ? undefined : 'transparent' }}
+        onSubmit={e => { e.preventDefault(); void act.run(() => api.saveReflection(x.id, reflection)); }}>
+        <div className="card-kicker" style={{ color: mine?.reflection ? undefined : 'var(--color-neutral-600)' }}>Your post-trip reflection</div>
+        {x.status !== 'completed' && !past ? (
+          <p className="card-body plain">Unlocks after {fmtISO(x.end_date)}. The record book asks what you planned, what happened, and what you would change. Each person on the trip writes their own.</p>
+        ) : (
+          <>
+            <textarea className="input" rows={4} value={reflection} onChange={e => setReflection(e.target.value)} placeholder="What you planned, what happened, and what you would change." style={{ borderRadius: 'var(--radius-md)' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <span className="small muted">Personal — the others on the trip write theirs.</span>
+              <button type="submit" className="btn btn-secondary" disabled={act.busy || reflection === (mine?.reflection ?? '')}>{act.busy ? 'Saving…' : 'Save reflection'}</button>
+            </div>
+          </>
+        )}
+      </form>
+
       <div className="card pad">
-        <div className="card-kicker">Validator</div>
+        <div className="card-kicker">Trip leader / validator</div>
         {x.validator_name ? (
           <div style={{ display: 'grid', gap: 4, fontSize: 14 }}><strong>{x.validator_name}</strong><span className="muted">{x.validator_title || 'Title not set'}</span><span className="muted">{x.validator_contact || 'Contact not set'}</span></div>
-        ) : <p className="card-body plain">The trip leader — an adult who isn't a relative — signs off on the expedition. Add their details when you edit.</p>}
+        ) : <p className="card-body plain">The trip leader — an adult who isn't a relative — signs off on the expedition for everyone. Add their details under Edit plan.</p>}
       </div>
     </>
   );
 }
 
-function ExpeditionForm({ draft, onSave, onCancel, onDelete }: { draft: Draft; onSave: (d: Draft) => Promise<void>; onCancel?: () => void; onDelete?: () => Promise<void> }) {
+function ExpeditionForm({ draft, isOwner, onSave, onCancel, onDelete }: { draft: Draft; isOwner: boolean; onSave: (d: Draft) => Promise<void>; onCancel?: () => void; onDelete?: () => Promise<void> }) {
   const [d, setD] = useState<Draft>(draft);
   const { busy, error, run } = useAsync();
   const set = (patch: Partial<Draft>) => setD(x => ({ ...x, ...patch }));
@@ -150,6 +230,7 @@ function ExpeditionForm({ draft, onSave, onCancel, onDelete }: { draft: Draft; o
 
   return (
     <form className="card pad" style={{ gap: 'var(--space-4)' }} onSubmit={e => { e.preventDefault(); if (!problems.length) void run(() => onSave({ ...d, name: d.name.trim() })); }}>
+      {d.id && !isOwner && <Notice kind="info">This is a shared plan — your changes are visible to everyone on the trip.</Notice>}
       <div className="form-grid">
         <Field label="Name"><input className="input" value={d.name} onChange={e => set({ name: e.target.value })} placeholder="Rae Lakes Loop" required /></Field>
         <Field label="Location"><input className="input" value={d.location ?? ''} onChange={e => set({ location: e.target.value })} placeholder="Kings Canyon National Park · Sierra Nevada" /></Field>
@@ -162,7 +243,7 @@ function ExpeditionForm({ draft, onSave, onCancel, onDelete }: { draft: Draft; o
           {(['planned', 'completed'] as const).map(st => <button key={st} type="button" className={`chip${d.status === st ? ' on' : ''}`} aria-pressed={d.status === st} onClick={() => set({ status: st })} style={{ padding: '8px 18px' }}>{st === 'planned' ? 'Planned' : 'Completed'}</button>)}
         </div>
       </div>
-      <Field label="Purpose statement" hint="What you'll do, with whom, and what you personally want to get out of it.">
+      <Field label="Purpose statement" hint="What you'll do, with whom, and what you want to get out of it.">
         <textarea className="input" rows={4} value={d.purpose ?? ''} onChange={e => set({ purpose: e.target.value })} style={{ borderRadius: 'var(--radius-md)' }} />
       </Field>
       <div style={{ display: 'grid', gap: 8 }}>
@@ -185,14 +266,9 @@ function ExpeditionForm({ draft, onSave, onCancel, onDelete }: { draft: Draft; o
           <input className="input" value={d.validator_contact ?? ''} onChange={e => set({ validator_contact: e.target.value })} placeholder="Email or phone" aria-label="Validator contact" />
         </div>
       </div>
-      {d.status === 'completed' && (
-        <Field label="Post-trip reflection" hint="What you planned, what happened, and what you would change.">
-          <textarea className="input" rows={4} value={d.reflection ?? ''} onChange={e => set({ reflection: e.target.value })} style={{ borderRadius: 'var(--radius-md)' }} />
-        </Field>
-      )}
       {error && <Notice kind="block">{error}</Notice>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', flexWrap: 'wrap' }}>
-        <span>{onDelete && <button type="button" className="link-btn small" disabled={busy} onClick={() => { if (confirm('Delete this expedition?')) void run(onDelete); }}>Delete expedition</button>}</span>
+        <span>{onDelete && isOwner && <button type="button" className="link-btn small" disabled={busy} onClick={() => { if (confirm('Delete this expedition for everyone on it?')) void run(onDelete); }}>Delete expedition</button>}</span>
         <span style={{ display: 'flex', gap: 8 }}>
           {onCancel && <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>Cancel</button>}
           <button type="submit" className="btn btn-primary" disabled={busy || problems.length > 0} title={problems[0]}>{busy ? 'Saving…' : 'Save expedition'}</button>

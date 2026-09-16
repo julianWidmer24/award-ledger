@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './lib/supabase';
-import type { Activity, Checkin, Entry, EntryStatus, Expedition, FriendRequest, FriendSummary, Goal, GoalStatus, Profile, Resource } from './types';
+import type { Activity, Checkin, Entry, EntryStatus, Expedition, ExpeditionInvite, ExpeditionMember, FriendProfile, FriendRequest, FriendSummary, Goal, GoalStatus, MyMembership, Profile, Resource } from './types';
 import type { GoalArea, ResourceCategory } from './data';
 import type { Snapshot } from './derive';
 import { toISODate } from './lib/dates';
@@ -35,6 +35,13 @@ export interface Api {
   updateResource(id: string, patch: Partial<Pick<Resource, 'title' | 'category' | 'notes' | 'url'>>): Promise<void>;
   deleteResource(r: Resource): Promise<void>;
   documentUrl(path: string): Promise<string>;
+  friendProfile(friendId: string): Promise<FriendProfile>;
+  expeditionMembers(expeditionId: string): Promise<ExpeditionMember[]>;
+  inviteToExpedition(expeditionId: string, friendId: string): Promise<void>;
+  respondExpeditionInvite(expeditionId: string, accept: boolean): Promise<void>;
+  leaveExpedition(expeditionId: string): Promise<void>;
+  removeExpeditionMember(expeditionId: string, userId: string): Promise<void>;
+  saveReflection(expeditionId: string, reflection: string): Promise<void>;
   signOut(): Promise<void>;
 }
 
@@ -92,7 +99,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         supabase.from('activities').select('*').eq('user_id', uid).order('created_at').then(r => must<Activity[]>(r)),
         supabase.from('entries').select('*').eq('user_id', uid).order('date', { ascending: false }).order('created_at', { ascending: false }).then(r => must<Entry[]>(r)),
         supabase.from('goals').select('*').eq('user_id', uid).then(r => must<Goal[]>(r)),
-        supabase.from('expeditions').select('*').eq('user_id', uid).order('start_date').then(r => must<Expedition[]>(r)),
+        supabase.from('expeditions').select('*').order('start_date').then(r => must<Expedition[]>(r)),
+        supabase.from('expedition_members').select('expedition_id, role, status, reflection, invited_by').eq('user_id', uid).then(r => must<MyMembership[]>(r)),
         supabase.rpc('friend_summaries').then(r => must<FriendSummary[]>(r)),
         supabase.rpc('pending_requests').then(r => must<FriendRequest[]>(r)),
         supabase.rpc('my_checkins').then(r => must<Checkin[]>(r)),
@@ -109,9 +117,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         await new Promise(r => setTimeout(r, 1500));
         result = await fetchAll();
       }
-      const [profile, activities, entries, goals, expeditions, friends, requests, checkins, resources] = result;
+      const [profile, activities, entries, goals, allExpeditions, memberships, friends, requests, checkins, resources] = result;
+      // Expeditions I own or have accepted are mine; pending invitations are listed separately.
+      const byId = new Map(memberships.map(m => [m.expedition_id, m]));
+      const expeditions = allExpeditions.filter(x => x.user_id === uid || byId.get(x.id)?.status === 'accepted');
+      const pending = allExpeditions.filter(x => byId.get(x.id)?.status === 'invited');
+      const invites: ExpeditionInvite[] = await Promise.all(pending.map(async x => {
+        const inviter = byId.get(x.id)?.invited_by;
+        const { data } = await supabase.rpc('expedition_members_view', { p_exp: x.id });
+        const row = (data as ExpeditionMember[] | null)?.find(m => m.user_id === uid);
+        return { expedition: x, invitedByName: row?.invited_by_name ?? (inviter ? 'A friend' : null) };
+      }));
       if (userRef.current !== uid) return;
-      setSnapshot({ profile, activities, entries: entries.map(e => ({ ...e, hours: Number(e.hours) })), goals, expeditions, resources });
+      setSnapshot({ profile, activities, entries: entries.map(e => ({ ...e, hours: Number(e.hours) })), goals, expeditions, memberships, expeditionInvites: invites, resources });
       // numeric columns can arrive as strings depending on the PostgREST version
       const num = (v: number | string | null) => (v === null || v === undefined ? null : Number(v));
       setSocial({ friends: friends.map(f => ({ ...f, hours_vps: num(f.hours_vps), hours_pd: num(f.hours_pd), hours_pf: num(f.hours_pf), week_hours: num(f.week_hours) })), requests, checkins });
@@ -188,6 +206,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (error) throw new Error(error.message);
         return data.signedUrl;
       },
+      friendProfile: async id => {
+        const { data, error } = await supabase.rpc('friend_profile', { p_friend: id });
+        if (error) throw new Error(error.message);
+        const fp = data as FriendProfile;
+        return { ...fp, entries: fp.entries?.map(e => ({ ...e, hours: Number(e.hours) })) ?? null, hours: fp.hours ? Object.fromEntries(Object.entries(fp.hours).map(([k, v]) => [k, Number(v)])) : null };
+      },
+      expeditionMembers: async id => must<ExpeditionMember[]>(await supabase.rpc('expedition_members_view', { p_exp: id })),
+      inviteToExpedition: (expedition_id, user_id) => after(supabase.from('expedition_members').insert({ expedition_id, user_id, role: 'member', status: 'invited', invited_by: uid() }).then(r => { must(r); })),
+      respondExpeditionInvite: (expedition_id, accept) => after((accept
+        ? supabase.from('expedition_members').update({ status: 'accepted' }).eq('expedition_id', expedition_id).eq('user_id', uid())
+        : supabase.from('expedition_members').delete().eq('expedition_id', expedition_id).eq('user_id', uid())).then(r => { must(r); })),
+      leaveExpedition: expedition_id => after(supabase.from('expedition_members').delete().eq('expedition_id', expedition_id).eq('user_id', uid()).then(r => { must(r); })),
+      removeExpeditionMember: (expedition_id, user_id) => after(supabase.from('expedition_members').delete().eq('expedition_id', expedition_id).eq('user_id', user_id).then(r => { must(r); })),
+      saveReflection: (expedition_id, reflection) => after(supabase.from('expedition_members').update({ reflection: reflection.trim() || null }).eq('expedition_id', expedition_id).eq('user_id', uid()).then(r => { must(r); })),
       signOut: async () => { await supabase.auth.signOut(); setSnapshot(null); },
     };
   }, [reload, snapshot]);
